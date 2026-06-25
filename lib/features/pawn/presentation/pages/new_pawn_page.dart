@@ -22,34 +22,36 @@ class _NewPawnPageState extends State<NewPawnPage> {
   int _currentStep = 1; // 1: Jaminan, 2: Keuangan, 3: Data Diri
 
   // --- Step 1 State ---
-  String _selectedCollateral = 'Handphone';
+  String _selectedCollateral = 'Barang'; // 'Barang', 'Emas', 'Motor / Mobil'
   
-  // Handphone / Laptop common state
+  // Barang form specific state
+  String _selectedBarangType = 'Handphone';
   String? _selectedBrand;
-  String? _selectedCondition;
   String _deviceLock = 'PIN/Sandi';
   bool _hasCharger = false;
   bool _hasTas = false;
   bool _hasDus = false;
-  final TextEditingController _modelController = TextEditingController();
-  final TextEditingController _noteController = TextEditingController();
+  String? _selectedCondition;
+  final TextEditingController _modelController = TextEditingController(); // Tipe / Model
+  final TextEditingController _noteController = TextEditingController(); // Keterangan
 
-  // Laptop specific state
-  String? _selectedProcessor;
-  String? _selectedRam;
-  String? _selectedStorage;
-
-  // Emas specific state
+  // Emas form specific state
   String? _selectedGoldType;
   String? _selectedKarat;
   String? _selectedCertificate;
   final TextEditingController _grossWeightController = TextEditingController();
   final TextEditingController _netWeightController = TextEditingController();
+  String _emasSistemTebus = 'Langsung Tebas';
 
-  // Vehicle specific state
-  String? _selectedVehicleType;
+  // Vehicle form specific state
+  final TextEditingController _vehicleBrandTypeController = TextEditingController();
+  final TextEditingController _vehicleHargaBaruController = TextEditingController();
   final TextEditingController _vehicleYearController = TextEditingController();
-  final TextEditingController _plateNumberController = TextEditingController();
+  final TextEditingController _vehicleNoMesinController = TextEditingController();
+  final TextEditingController _vehicleNoRangkaController = TextEditingController();
+  final TextEditingController _vehicleNoPolisiController = TextEditingController();
+  String _vehicleSistemTebus = 'Langsung Tebas';
+  String? _selectedVehicleCondition;
   bool _hasStnk = false;
   bool _hasBpkb = false;
   bool _hasFaktur = false;
@@ -74,16 +76,20 @@ class _NewPawnPageState extends State<NewPawnPage> {
   void dispose() {
     _modelController.dispose();
     _noteController.dispose();
+    _grossWeightController.dispose();
+    _netWeightController.dispose();
+    _vehicleBrandTypeController.dispose();
+    _vehicleHargaBaruController.dispose();
+    _vehicleYearController.dispose();
+    _vehicleNoMesinController.dispose();
+    _vehicleNoRangkaController.dispose();
+    _vehicleNoPolisiController.dispose();
     _pawnAmountController.dispose();
     _nikController.dispose();
     _fullNameController.dispose();
     _phoneController.dispose();
     _addressController.dispose();
     _birthPlaceController.dispose();
-    _grossWeightController.dispose();
-    _netWeightController.dispose();
-    _vehicleYearController.dispose();
-    _plateNumberController.dispose();
     super.dispose();
   }
 
@@ -92,23 +98,57 @@ class _NewPawnPageState extends State<NewPawnPage> {
     return int.tryParse(cleanString) ?? 0;
   }
 
+  int get _collateralTaksiranValue {
+    if (_selectedCollateral == 'Barang') {
+      double basePrice = 3000000;
+      if (_selectedBrand == 'Apple') basePrice = 12000000;
+      else if (_selectedBrand == 'Samsung') basePrice = 8000000;
+      else if (_selectedBrand == 'Xiaomi') basePrice = 4000000;
+      else if (_selectedBrand == 'Oppo') basePrice = 3500000;
+      
+      double multiplier = 0.5;
+      if (_selectedCondition == 'Mulus (95%+)') multiplier = 0.85;
+      else if (_selectedCondition == 'Lecet Pemakaian') multiplier = 0.65;
+      else if (_selectedCondition == 'Minus Fungsi Sederhana') multiplier = 0.45;
+      
+      return (basePrice * multiplier).toInt();
+    } else if (_selectedCollateral == 'Emas') {
+      final gross = double.tryParse(_grossWeightController.text) ?? 0;
+      final Map<String, double> karatPcts = {
+        '6K': 0.250, '10K': 0.417, '14K': 0.585, '16K': 0.666,
+        '18K': 0.750, '20K': 0.833, '22K': 0.916, '24K': 0.999
+      };
+      final selectedKaratPct = karatPcts[_selectedKarat] ?? 0.0;
+      return (gross * 1150000 * selectedKaratPct).toInt();
+    } else {
+      // Vehicle
+      final yearStr = _vehicleYearController.text;
+      final year = int.tryParse(yearStr) ?? DateTime.now().year;
+      final hargaBaru = double.tryParse(_vehicleHargaBaruController.text.replaceAll('.', '').replaceAll(',', '')) ?? 0;
+      final ageYears = (DateTime.now().year - year).clamp(0, 26);
+      const depresiasi = 0.10;
+      final faktor = (1 - depresiasi * ageYears).clamp(0.3, 1.0);
+      return (hargaBaru * faktor * 0.7).toInt();
+    }
+  }
+
   void _onCollateralSelected(String type) {
     setState(() {
       _selectedCollateral = type;
       _selectedBrand = null;
       _selectedCondition = null;
-      _selectedProcessor = null;
-      _selectedRam = null;
-      _selectedStorage = null;
       _selectedGoldType = null;
       _selectedKarat = null;
       _selectedCertificate = null;
-      _selectedVehicleType = null;
       
       _grossWeightController.clear();
       _netWeightController.clear();
+      _vehicleBrandTypeController.clear();
+      _vehicleHargaBaruController.clear();
       _vehicleYearController.clear();
-      _plateNumberController.clear();
+      _vehicleNoMesinController.clear();
+      _vehicleNoRangkaController.clear();
+      _vehicleNoPolisiController.clear();
       _modelController.clear();
       _noteController.clear();
       
@@ -119,6 +159,9 @@ class _NewPawnPageState extends State<NewPawnPage> {
       _hasStnk = false;
       _hasBpkb = false;
       _hasFaktur = false;
+      _emasSistemTebus = 'Langsung Tebas';
+      _vehicleSistemTebus = 'Langsung Tebas';
+      _selectedVehicleCondition = null;
     });
   }
 
@@ -135,6 +178,17 @@ class _NewPawnPageState extends State<NewPawnPage> {
   void _handleNextStep() {
     if (_currentStep == 1) {
       if (_step1FormKey.currentState!.validate()) {
+        // Prefill pawn amount dynamically to maximum estimate for high-fidelity flow
+        final taksiranVal = _collateralTaksiranValue;
+        // format and display in pawn amount controller
+        final s = taksiranVal.toString();
+        final buffer = StringBuffer();
+        for (int i = 0; i < s.length; i++) {
+          if (i > 0 && (s.length - i) % 3 == 0) buffer.write('.');
+          buffer.write(s[i]);
+        }
+        _pawnAmountController.text = buffer.toString();
+        
         setState(() {
           _currentStep = 2;
         });
@@ -178,21 +232,39 @@ class _NewPawnPageState extends State<NewPawnPage> {
           gender: _selectedGender ?? 'Laki-laki',
         );
         
-        final periodDays = _selectedPeriod == '15 Hari' ? 15 : (_selectedPeriod == '30 Hari' ? 30 : 60);
+        final periodDays = _selectedPeriod == '15 Hari' ? 15 : 30;
         final pawnAmt = _pawnAmountValue;
-        final int dailyFee = ((pawnAmt * 0.01428) / 100).round() * 100;
+        final int ceilTiers = pawnAmt > 0 ? ((pawnAmt / 500000).ceil()) : 0;
+        final int dailyFee = ceilTiers * 5000;
         final int totalFee = dailyFee * periodDays;
         final int totalRepayment = pawnAmt + totalFee;
         
-        String itemModel = _modelController.text.isNotEmpty ? _modelController.text : 'Gadai $_selectedCollateral';
+        String txBrand = '';
+        String txModel = '';
+        String txCondition = '';
+        
+        if (_selectedCollateral == 'Barang') {
+          txBrand = _selectedBrand ?? 'Lainnya';
+          txModel = _modelController.text.isNotEmpty ? _modelController.text : 'Gadai Barang';
+          txCondition = _selectedCondition ?? 'Normal';
+        } else if (_selectedCollateral == 'Emas') {
+          txBrand = _selectedGoldType ?? 'Emas';
+          txModel = '${_selectedKarat ?? "24K"} (Gross: ${_grossWeightController.text}g)';
+          txCondition = _selectedCertificate ?? 'Tanpa Sertifikat';
+        } else {
+          // Vehicle
+          txBrand = _vehicleBrandTypeController.text.isNotEmpty ? _vehicleBrandTypeController.text : 'Motor/Mobil';
+          txModel = '${_vehicleNoPolisiController.text} (Tahun: ${_vehicleYearController.text})';
+          txCondition = _selectedVehicleCondition ?? 'Prima';
+        }
         
         final newTx = PawnTransaction(
           id: newTxId,
           customerId: newCustId,
           collateralType: _selectedCollateral,
-          brand: _selectedBrand ?? 'Lainnya',
-          model: itemModel,
-          condition: _selectedCondition ?? 'Normal',
+          brand: txBrand,
+          model: txModel,
+          condition: txCondition,
           principal: pawnAmt,
           periodDays: periodDays,
           dailyFee: dailyFee,
@@ -209,7 +281,7 @@ class _NewPawnPageState extends State<NewPawnPage> {
         showSuccessDialog(
           context: context,
           selectedCollateral: _selectedCollateral,
-          modelName: _modelController.text,
+          modelName: txModel,
         );
       }
     }
@@ -222,38 +294,45 @@ class _NewPawnPageState extends State<NewPawnPage> {
           formKey: _step1FormKey,
           selectedCollateral: _selectedCollateral,
           onCollateralSelected: _onCollateralSelected,
-          modelController: _modelController,
-          noteController: _noteController,
-          grossWeightController: _grossWeightController,
-          netWeightController: _netWeightController,
-          vehicleYearController: _vehicleYearController,
-          plateNumberController: _plateNumberController,
+          
+          selectedBarangType: _selectedBarangType,
+          onBarangTypeChanged: (val) => setState(() => _selectedBarangType = val ?? 'Handphone'),
           selectedBrand: _selectedBrand,
           onBrandChanged: (val) => setState(() => _selectedBrand = val),
+          modelController: _modelController,
           selectedCondition: _selectedCondition,
           onConditionChanged: (val) => setState(() => _selectedCondition = val),
+          noteController: _noteController,
           deviceLock: _deviceLock,
           onDeviceLockChanged: (val) => setState(() => _deviceLock = val),
           hasCharger: _hasCharger,
           onHasChargerChanged: (val) => setState(() => _hasCharger = val),
-          hasDus: _hasDus,
-          onHasDusChanged: (val) => setState(() => _hasDus = val),
-          selectedProcessor: _selectedProcessor,
-          onProcessorChanged: (val) => setState(() => _selectedProcessor = val),
-          selectedRam: _selectedRam,
-          onRamChanged: (val) => setState(() => _selectedRam = val),
-          selectedStorage: _selectedStorage,
-          onStorageChanged: (val) => setState(() => _selectedStorage = val),
           hasTas: _hasTas,
           onHasTasChanged: (val) => setState(() => _hasTas = val),
+          hasDus: _hasDus,
+          onHasDusChanged: (val) => setState(() => _hasDus = val),
+
           selectedGoldType: _selectedGoldType,
           onGoldTypeChanged: (val) => setState(() => _selectedGoldType = val),
           selectedKarat: _selectedKarat,
           onKaratChanged: (val) => setState(() => _selectedKarat = val),
+          grossWeightController: _grossWeightController,
+          netWeightController: _netWeightController,
           selectedCertificate: _selectedCertificate,
           onCertificateChanged: (val) => setState(() => _selectedCertificate = val),
-          selectedVehicleType: _selectedVehicleType,
-          onVehicleTypeChanged: (val) => setState(() => _selectedVehicleType = val),
+          emasSistemTebus: _emasSistemTebus,
+          onEmasSistemTebusChanged: (val) => setState(() => _emasSistemTebus = val ?? 'Langsung Tebas'),
+
+          vehicleBrandTypeController: _vehicleBrandTypeController,
+          vehicleHargaBaruController: _vehicleHargaBaruController,
+          vehicleYearController: _vehicleYearController,
+          vehicleNoMesinController: _vehicleNoMesinController,
+          vehicleNoRangkaController: _vehicleNoRangkaController,
+          vehicleNoPolisiController: _vehicleNoPolisiController,
+          vehicleSistemTebus: _vehicleSistemTebus,
+          onVehicleSistemTebusChanged: (val) => setState(() => _vehicleSistemTebus = val ?? 'Langsung Tebas'),
+          selectedVehicleCondition: _selectedVehicleCondition,
+          onVehicleConditionChanged: (val) => setState(() => _selectedVehicleCondition = val),
           hasStnk: _hasStnk,
           onHasStnkChanged: (val) => setState(() => _hasStnk = val),
           hasBpkb: _hasBpkb,
@@ -268,6 +347,7 @@ class _NewPawnPageState extends State<NewPawnPage> {
           selectedPeriod: _selectedPeriod,
           onPeriodChanged: (val) => setState(() => _selectedPeriod = val!),
           onAmountChanged: () => setState(() {}),
+          maxTaksiran: _collateralTaksiranValue,
         );
       case 3:
         return Step3BiodataView(

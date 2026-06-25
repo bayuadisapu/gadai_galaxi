@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:galaxi_gadai/core/constants/app_colors.dart';
 import 'new_pawn_shared_widgets.dart';
 
@@ -7,49 +8,47 @@ class Step1CollateralView extends StatefulWidget {
   final String selectedCollateral;
   final Function(String) onCollateralSelected;
   
-  // Controllers
-  final TextEditingController modelController;
-  final TextEditingController noteController;
-  final TextEditingController grossWeightController;
-  final TextEditingController netWeightController;
-  final TextEditingController vehicleYearController;
-  final TextEditingController plateNumberController;
-
-  // Selected Options & State getters/setters
+  // Barang form state & controllers
+  final String selectedBarangType;
+  final ValueChanged<String?> onBarangTypeChanged;
   final String? selectedBrand;
   final ValueChanged<String?> onBrandChanged;
+  final TextEditingController modelController;
   final String? selectedCondition;
   final ValueChanged<String?> onConditionChanged;
-
-  // HP specific
+  final TextEditingController noteController; 
   final String deviceLock;
   final ValueChanged<String> onDeviceLockChanged;
   final bool hasCharger;
   final ValueChanged<bool> onHasChargerChanged;
+  final bool hasTas;
+  final ValueChanged<bool> onHasTasChanged;
   final bool hasDus;
   final ValueChanged<bool> onHasDusChanged;
 
-  // Laptop specific
-  final String? selectedProcessor;
-  final ValueChanged<String?> onProcessorChanged;
-  final String? selectedRam;
-  final ValueChanged<String?> onRamChanged;
-  final String? selectedStorage;
-  final ValueChanged<String?> onStorageChanged;
-  final bool hasTas;
-  final ValueChanged<bool> onHasTasChanged;
-
-  // Emas specific
+  // Emas form state & controllers
   final String? selectedGoldType;
   final ValueChanged<String?> onGoldTypeChanged;
   final String? selectedKarat;
   final ValueChanged<String?> onKaratChanged;
+  final TextEditingController grossWeightController;
+  final TextEditingController netWeightController;
   final String? selectedCertificate;
   final ValueChanged<String?> onCertificateChanged;
+  final String emasSistemTebus;
+  final ValueChanged<String?> onEmasSistemTebusChanged;
 
-  // Vehicle specific
-  final String? selectedVehicleType;
-  final ValueChanged<String?> onVehicleTypeChanged;
+  // Vehicle form state & controllers
+  final TextEditingController vehicleBrandTypeController;
+  final TextEditingController vehicleHargaBaruController;
+  final TextEditingController vehicleYearController;
+  final TextEditingController vehicleNoMesinController;
+  final TextEditingController vehicleNoRangkaController;
+  final TextEditingController vehicleNoPolisiController;
+  final String vehicleSistemTebus;
+  final ValueChanged<String?> onVehicleSistemTebusChanged;
+  final String? selectedVehicleCondition;
+  final ValueChanged<String?> onVehicleConditionChanged;
   final bool hasStnk;
   final ValueChanged<bool> onHasStnkChanged;
   final bool hasBpkb;
@@ -62,38 +61,45 @@ class Step1CollateralView extends StatefulWidget {
     required this.formKey,
     required this.selectedCollateral,
     required this.onCollateralSelected,
-    required this.modelController,
-    required this.noteController,
-    required this.grossWeightController,
-    required this.netWeightController,
-    required this.vehicleYearController,
-    required this.plateNumberController,
+    
+    required this.selectedBarangType,
+    required this.onBarangTypeChanged,
     required this.selectedBrand,
     required this.onBrandChanged,
+    required this.modelController,
     required this.selectedCondition,
     required this.onConditionChanged,
+    required this.noteController,
     required this.deviceLock,
     required this.onDeviceLockChanged,
     required this.hasCharger,
     required this.onHasChargerChanged,
-    required this.hasDus,
-    required this.onHasDusChanged,
-    required this.selectedProcessor,
-    required this.onProcessorChanged,
-    required this.selectedRam,
-    required this.onRamChanged,
-    required this.selectedStorage,
-    required this.onStorageChanged,
     required this.hasTas,
     required this.onHasTasChanged,
+    required this.hasDus,
+    required this.onHasDusChanged,
+
     required this.selectedGoldType,
     required this.onGoldTypeChanged,
     required this.selectedKarat,
     required this.onKaratChanged,
+    required this.grossWeightController,
+    required this.netWeightController,
     required this.selectedCertificate,
     required this.onCertificateChanged,
-    required this.selectedVehicleType,
-    required this.onVehicleTypeChanged,
+    required this.emasSistemTebus,
+    required this.onEmasSistemTebusChanged,
+
+    required this.vehicleBrandTypeController,
+    required this.vehicleHargaBaruController,
+    required this.vehicleYearController,
+    required this.vehicleNoMesinController,
+    required this.vehicleNoRangkaController,
+    required this.vehicleNoPolisiController,
+    required this.vehicleSistemTebus,
+    required this.onVehicleSistemTebusChanged,
+    required this.selectedVehicleCondition,
+    required this.onVehicleConditionChanged,
     required this.hasStnk,
     required this.onHasStnkChanged,
     required this.hasBpkb,
@@ -107,22 +113,37 @@ class Step1CollateralView extends StatefulWidget {
 }
 
 class _Step1CollateralViewState extends State<Step1CollateralView> {
-  final List<String> _hpBrands = ['Apple', 'Samsung', 'Oppo', 'Vivo', 'Xiaomi', 'Realme', 'Infinix'];
-  final List<String> _laptopBrands = ['ASUS', 'Lenovo', 'HP', 'Dell', 'Acer', 'Apple (MacBook)', 'MSI'];
-  final List<String> _hpConditions = ['Mulus / Seperti Baru', 'Normal / Lecet Pemakaian', 'Layar Gores / Retak', 'Mati Total / Rusak'];
-  final List<String> _laptopConditions = ['Mulus / Seperti Baru', 'Normal / Lecet Pemakaian', 'Keyboard Mati / Rusak', 'Layar Bergaris / Jamur', 'Mati Total'];
+  final Map<String, List<String>> _brandsPerType = {
+    'Handphone': ['Apple', 'Samsung', 'Xiaomi', 'Oppo'],
+    'Laptop': ['ASUS', 'Lenovo', 'HP', 'Dell', 'Acer', 'Apple'],
+    'TV': ['Samsung', 'LG', 'Sony', 'Sharp', 'Panasonic', 'Xiaomi'],
+    'Lainnya': ['Lainnya'],
+  };
 
-  final List<String> _processors = ['Intel Core i3 / Ryzen 3', 'Intel Core i5 / Ryzen 5', 'Intel Core i7 / Ryzen 7', 'Intel Core i9 / Ryzen 9', 'Apple M1/M2/M3 Series'];
-  final List<String> _ramOptions = ['4 GB', '8 GB', '16 GB', '32 GB'];
-  final List<String> _storageOptions = ['256 GB SSD', '512 GB SSD', '1 TB SSD', '1 TB HDD'];
+  final List<String> _barangConditions = [
+    'Mulus (95%+)',
+    'Lecet Pemakaian',
+    'Minus Fungsi Sederhana'
+  ];
 
-  final List<String> _goldTypes = ['Emas Batangan / Logam Mulia', 'Perhiasan (Cincin / Kalung / Gelang)', 'Koin Emas'];
-  final List<String> _goldKarats = ['24 Karat', '22 Karat', '18 Karat', '16 Karat', '14 Karat'];
-  final List<String> _certificates = ['Sertifikat Antam', 'Sertifikat UBS', 'Non-Sertifikat / Surat Toko'];
+  final List<String> _goldTypes = [
+    'Emas Batangan / Logam Mulia',
+    'Perhiasan (Cincin / Kalung / Gelang)',
+    'Koin Emas'
+  ];
 
-  final List<String> _vehicleTypes = ['Sepeda Motor', 'Mobil'];
-  final List<String> _vehicleBrands = ['Honda', 'Yamaha', 'Suzuki', 'Kawasaki', 'Toyota', 'Daihatsu', 'Mitsubishi', 'Nissan'];
-  final List<String> _vehicleConditions = ['Prima / Mulus', 'Lecet Pemakaian', 'Mesin Kasar / Modifikasi', 'Mati / Rusak Berat'];
+  final List<String> _certificates = [
+    'Sertifikat Antam',
+    'Sertifikat UBS',
+    'Non-Sertifikat / Surat Toko'
+  ];
+
+  final List<String> _vehicleConditions = [
+    'Prima / Mulus',
+    'Lecet Pemakaian',
+    'Mesin Kasar / Modifikasi',
+    'Mati / Rusak Berat'
+  ];
 
   InputDecoration _getInputDecoration({String? hint}) {
     return InputDecoration(
@@ -143,18 +164,24 @@ class _Step1CollateralViewState extends State<Step1CollateralView> {
   }
 
   Widget _buildInfoText(String msg) {
-    return Row(
-      children: [
-        const Icon(Icons.info_outline_rounded, color: Color(0xFF64748B), size: 14),
-        const SizedBox(width: 6),
-        Text(
-          msg,
-          style: TextStyle(
-            color: const Color(0xFF64748B).withValues(alpha: 0.8),
-            fontSize: 12,
+    return Padding(
+      padding: const EdgeInsets.only(top: 4),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Icon(Icons.info_outline_rounded, color: Color(0xFF64748B), size: 14),
+          const SizedBox(width: 6),
+          Expanded(
+            child: Text(
+              msg,
+              style: TextStyle(
+                color: const Color(0xFF64748B).withValues(alpha: 0.8),
+                fontSize: 12,
+              ),
+            ),
           ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 
@@ -225,6 +252,18 @@ class _Step1CollateralViewState extends State<Step1CollateralView> {
     );
   }
 
+  String _formatCurrency(int val) {
+    final s = val.toString();
+    final buffer = StringBuffer();
+    for (int i = 0; i < s.length; i++) {
+      if (i > 0 && (s.length - i) % 3 == 0) {
+        buffer.write('.');
+      }
+      buffer.write(s[i]);
+    }
+    return buffer.toString();
+  }
+
   @override
   Widget build(BuildContext context) {
     return Column(
@@ -250,26 +289,13 @@ class _Step1CollateralViewState extends State<Step1CollateralView> {
                 children: [
                   Expanded(
                     child: CollateralCard(
-                      icon: Icons.phone_android_rounded,
-                      label: 'Handphone',
-                      isSelected: widget.selectedCollateral == 'Handphone',
-                      onTap: () => widget.onCollateralSelected('Handphone'),
+                      icon: Icons.devices_other_rounded,
+                      label: 'Barang',
+                      isSelected: widget.selectedCollateral == 'Barang',
+                      onTap: () => widget.onCollateralSelected('Barang'),
                     ),
                   ),
-                  const SizedBox(width: 16),
-                  Expanded(
-                    child: CollateralCard(
-                      icon: Icons.laptop_mac_rounded,
-                      label: 'Laptop',
-                      isSelected: widget.selectedCollateral == 'Laptop',
-                      onTap: () => widget.onCollateralSelected('Laptop'),
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 16),
-              Row(
-                children: [
+                  const SizedBox(width: 12),
                   Expanded(
                     child: CollateralCard(
                       icon: Icons.workspace_premium_outlined,
@@ -278,7 +304,7 @@ class _Step1CollateralViewState extends State<Step1CollateralView> {
                       onTap: () => widget.onCollateralSelected('Emas'),
                     ),
                   ),
-                  const SizedBox(width: 16),
+                  const SizedBox(width: 12),
                   Expanded(
                     child: CollateralCard(
                       icon: Icons.two_wheeler_rounded,
@@ -314,37 +340,55 @@ class _Step1CollateralViewState extends State<Step1CollateralView> {
 
   Widget _buildDynamicForm() {
     switch (widget.selectedCollateral) {
-      case 'Handphone':
-        return _buildHandphoneForm();
-      case 'Laptop':
-        return _buildLaptopForm();
+      case 'Barang':
+        return _buildBarangForm();
       case 'Emas':
         return _buildEmasForm();
       case 'Motor / Mobil':
         return _buildVehicleForm();
       default:
-        return _buildHandphoneForm();
+        return _buildBarangForm();
     }
   }
 
-  Widget _buildHandphoneForm() {
+  Widget _buildBarangForm() {
+    final brands = _brandsPerType[widget.selectedBarangType] ?? ['Lainnya'];
+    
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         const Text(
-          'Merk Handphone',
+          'Jenis Barang',
           style: TextStyle(color: AppColors.textDark, fontSize: 14, fontWeight: FontWeight.w600),
         ),
         const SizedBox(height: 8),
         DropdownButtonFormField<String>(
-          value: widget.selectedBrand,
+          value: widget.selectedBarangType,
+          decoration: _getInputDecoration(),
+          items: const [
+            DropdownMenuItem(value: 'Handphone', child: Text('Handphone')),
+            DropdownMenuItem(value: 'Laptop', child: Text('Laptop')),
+            DropdownMenuItem(value: 'TV', child: Text('TV')),
+            DropdownMenuItem(value: 'Lainnya', child: Text('Lainnya')),
+          ],
+          onChanged: widget.onBarangTypeChanged,
+        ),
+        const SizedBox(height: 20),
+
+        const Text(
+          'Merk Barang',
+          style: TextStyle(color: AppColors.textDark, fontSize: 14, fontWeight: FontWeight.w600),
+        ),
+        const SizedBox(height: 8),
+        DropdownButtonFormField<String>(
+          value: brands.contains(widget.selectedBrand) ? widget.selectedBrand : null,
           hint: const Text('Pilih Merk', style: TextStyle(color: AppColors.textInputHint, fontSize: 15)),
           decoration: _getInputDecoration(),
-          items: _hpBrands.map((brand) {
+          items: brands.map((brand) {
             return DropdownMenuItem(value: brand, child: Text(brand, style: const TextStyle(fontSize: 15)));
           }).toList(),
           onChanged: widget.onBrandChanged,
-          validator: (value) => value == null ? 'Silakan pilih merk handphone' : null,
+          validator: (value) => value == null ? 'Silakan pilih merk barang' : null,
         ),
         const SizedBox(height: 20),
         
@@ -355,12 +399,11 @@ class _Step1CollateralViewState extends State<Step1CollateralView> {
         const SizedBox(height: 8),
         TextFormField(
           controller: widget.modelController,
-          decoration: _getInputDecoration(hint: 'Contoh: iPhone 15 Pro Max'),
+          decoration: _getInputDecoration(hint: 'Contoh: iPhone 15 Pro Max / ROG Zephyrus G14'),
           style: const TextStyle(fontSize: 15),
           validator: (value) => (value == null || value.trim().isEmpty) ? 'Tipe / model tidak boleh kosong' : null,
         ),
-        const SizedBox(height: 6),
-        _buildInfoText('Ikut petunjuk penulisan tipe hp yang lengkap'),
+        _buildInfoText('Jika tipe tidak tersedia anda bisa input manual...'),
         const SizedBox(height: 20),
         
         const Text(
@@ -372,203 +415,57 @@ class _Step1CollateralViewState extends State<Step1CollateralView> {
           value: widget.selectedCondition,
           hint: const Text('Pilih Kondisi', style: TextStyle(color: AppColors.textInputHint, fontSize: 15)),
           decoration: _getInputDecoration(),
-          items: _hpConditions.map((cond) {
+          items: _barangConditions.map((cond) {
             return DropdownMenuItem(value: cond, child: Text(cond, style: const TextStyle(fontSize: 15)));
           }).toList(),
           onChanged: widget.onConditionChanged,
-          validator: (value) => value == null ? 'Silakan pilih kondisi handphone' : null,
+          validator: (value) => value == null ? 'Silakan pilih kondisi barang' : null,
         ),
         const SizedBox(height: 20),
         
         const Text(
-          'Keterangan Tambahan',
+          'Keterangan Tambahan / Deskripsi Fisik',
           style: TextStyle(color: AppColors.textDark, fontSize: 14, fontWeight: FontWeight.w600),
         ),
         const SizedBox(height: 8),
         TextFormField(
           controller: widget.noteController,
           maxLines: 3,
-          decoration: _getInputDecoration(hint: 'Contoh: Layar terpasang TG, kamera jernih...'),
+          decoration: _getInputDecoration(hint: 'Catat keluhan fisik atau performa barang jaminan...'),
           style: const TextStyle(fontSize: 15),
         ),
         const SizedBox(height: 20),
         
-        const Text(
-          'Kunci Perangkat',
-          style: TextStyle(color: AppColors.textDark, fontSize: 14, fontWeight: FontWeight.w600),
-        ),
-        const SizedBox(height: 8),
-        Row(
-          children: [
-            _buildRadioButton('PIN/Sandi'),
-            const SizedBox(width: 16),
-            _buildRadioButton('Pola'),
-            const SizedBox(width: 16),
-            _buildRadioButton('Tanpa Kunci'),
-          ],
-        ),
-        const SizedBox(height: 20),
+        if (widget.selectedBarangType == 'Handphone') ...[
+          const Text(
+            'Kunci Perangkat',
+            style: TextStyle(color: AppColors.textDark, fontSize: 14, fontWeight: FontWeight.w600),
+          ),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              _buildRadioButton('PIN/Sandi'),
+              const SizedBox(width: 20),
+              _buildRadioButton('Pola'),
+              const SizedBox(width: 20),
+              _buildRadioButton('Tanpa Kunci'),
+            ],
+          ),
+          const SizedBox(height: 20),
+        ],
         
         const Text(
-          'Kelengkapan',
+          'Kelengkapan Barang',
           style: TextStyle(color: AppColors.textDark, fontSize: 14, fontWeight: FontWeight.w600),
         ),
         const SizedBox(height: 8),
         Row(
           children: [
             _buildCheckbox(label: 'Charger', value: widget.hasCharger, onChanged: (val) => widget.onHasChargerChanged(val ?? false)),
-            const SizedBox(width: 16),
-            _buildCheckbox(label: 'Dus', value: widget.hasDus, onChanged: (val) => widget.onHasDusChanged(val ?? false)),
-          ],
-        ),
-      ],
-    );
-  }
-
-  Widget _buildLaptopForm() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Text(
-          'Merk Laptop',
-          style: TextStyle(color: AppColors.textDark, fontSize: 14, fontWeight: FontWeight.w600),
-        ),
-        const SizedBox(height: 8),
-        DropdownButtonFormField<String>(
-          value: widget.selectedBrand,
-          hint: const Text('Pilih Merk Laptop', style: TextStyle(color: AppColors.textInputHint, fontSize: 15)),
-          decoration: _getInputDecoration(),
-          items: _laptopBrands.map((brand) {
-            return DropdownMenuItem(value: brand, child: Text(brand, style: const TextStyle(fontSize: 15)));
-          }).toList(),
-          onChanged: widget.onBrandChanged,
-          validator: (value) => value == null ? 'Silakan pilih merk laptop' : null,
-        ),
-        const SizedBox(height: 20),
-        
-        const Text(
-          'Tipe / Model',
-          style: TextStyle(color: AppColors.textDark, fontSize: 14, fontWeight: FontWeight.w600),
-        ),
-        const SizedBox(height: 8),
-        TextFormField(
-          controller: widget.modelController,
-          decoration: _getInputDecoration(hint: 'Contoh: ThinkPad L14 Gen 3 / ROG G14'),
-          style: const TextStyle(fontSize: 15),
-          validator: (value) => (value == null || value.trim().isEmpty) ? 'Tipe laptop tidak boleh kosong' : null,
-        ),
-        const SizedBox(height: 20),
-
-        const Text(
-          'Prosesor',
-          style: TextStyle(color: AppColors.textDark, fontSize: 14, fontWeight: FontWeight.w600),
-        ),
-        const SizedBox(height: 8),
-        DropdownButtonFormField<String>(
-          value: widget.selectedProcessor,
-          hint: const Text('Pilih Tipe CPU', style: TextStyle(color: AppColors.textInputHint, fontSize: 15)),
-          decoration: _getInputDecoration(),
-          items: _processors.map((cpu) {
-            return DropdownMenuItem(value: cpu, child: Text(cpu, style: const TextStyle(fontSize: 15)));
-          }).toList(),
-          onChanged: widget.onProcessorChanged,
-          validator: (value) => value == null ? 'Silakan pilih prosesor' : null,
-        ),
-        const SizedBox(height: 20),
-
-        Row(
-          children: [
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text(
-                    'RAM',
-                    style: TextStyle(color: AppColors.textDark, fontSize: 14, fontWeight: FontWeight.w600),
-                  ),
-                  const SizedBox(height: 8),
-                  DropdownButtonFormField<String>(
-                    value: widget.selectedRam,
-                    hint: const Text('Pilih RAM', style: TextStyle(color: AppColors.textInputHint, fontSize: 14)),
-                    decoration: _getInputDecoration(),
-                    items: _ramOptions.map((ram) {
-                      return DropdownMenuItem(value: ram, child: Text(ram, style: const TextStyle(fontSize: 14)));
-                    }).toList(),
-                    onChanged: widget.onRamChanged,
-                    validator: (value) => value == null ? 'RAM wajib dipilih' : null,
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(width: 16),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text(
-                    'Penyimpanan',
-                    style: TextStyle(color: AppColors.textDark, fontSize: 14, fontWeight: FontWeight.w600),
-                  ),
-                  const SizedBox(height: 8),
-                  DropdownButtonFormField<String>(
-                    value: widget.selectedStorage,
-                    hint: const Text('Pilih Storage', style: TextStyle(color: AppColors.textInputHint, fontSize: 14)),
-                    decoration: _getInputDecoration(),
-                    items: _storageOptions.map((stg) {
-                      return DropdownMenuItem(value: stg, child: Text(stg, style: const TextStyle(fontSize: 14)));
-                    }).toList(),
-                    onChanged: widget.onStorageChanged,
-                    validator: (value) => value == null ? 'Storage wajib dipilih' : null,
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 20),
-
-        const Text(
-          'Kondisi Barang',
-          style: TextStyle(color: AppColors.textDark, fontSize: 14, fontWeight: FontWeight.w600),
-        ),
-        const SizedBox(height: 8),
-        DropdownButtonFormField<String>(
-          value: widget.selectedCondition,
-          hint: const Text('Pilih Kondisi Laptop', style: TextStyle(color: AppColors.textInputHint, fontSize: 15)),
-          decoration: _getInputDecoration(),
-          items: _laptopConditions.map((cond) {
-            return DropdownMenuItem(value: cond, child: Text(cond, style: const TextStyle(fontSize: 15)));
-          }).toList(),
-          onChanged: widget.onConditionChanged,
-          validator: (value) => value == null ? 'Kondisi barang wajib dipilih' : null,
-        ),
-        const SizedBox(height: 20),
-
-        const Text(
-          'Keterangan Tambahan',
-          style: TextStyle(color: AppColors.textDark, fontSize: 14, fontWeight: FontWeight.w600),
-        ),
-        const SizedBox(height: 8),
-        TextFormField(
-          controller: widget.noteController,
-          maxLines: 3,
-          decoration: _getInputDecoration(hint: 'Contoh: Layar ada white spot kecil, baterai awet 3 jam...'),
-          style: const TextStyle(fontSize: 15),
-        ),
-        const SizedBox(height: 20),
-
-        const Text(
-          'Kelengkapan',
-          style: TextStyle(color: AppColors.textDark, fontSize: 14, fontWeight: FontWeight.w600),
-        ),
-        const SizedBox(height: 8),
-        Row(
-          children: [
-            _buildCheckbox(label: 'Charger Adaptor', value: widget.hasCharger, onChanged: (val) => widget.onHasChargerChanged(val ?? false)),
-            const SizedBox(width: 16),
-            _buildCheckbox(label: 'Tas Laptop', value: widget.hasTas, onChanged: (val) => widget.onHasTasChanged(val ?? false)),
-            const SizedBox(width: 16),
-            _buildCheckbox(label: 'Dus Box', value: widget.hasDus, onChanged: (val) => widget.onHasDusChanged(val ?? false)),
+            const SizedBox(width: 20),
+            _buildCheckbox(label: 'Tas', value: widget.hasTas, onChanged: (val) => widget.onHasTasChanged(val ?? false)),
+            const SizedBox(width: 20),
+            _buildCheckbox(label: 'Dos', value: widget.hasDus, onChanged: (val) => widget.onHasDusChanged(val ?? false)),
           ],
         ),
       ],
@@ -579,6 +476,69 @@ class _Step1CollateralViewState extends State<Step1CollateralView> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        // ===== Card Kuning: Taksiran Emas =====
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(14),
+          margin: const EdgeInsets.only(bottom: 20),
+          decoration: BoxDecoration(
+            gradient: const LinearGradient(
+              colors: [Color(0xFFFFF8E1), Color(0xFFFFF3C0)],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: const Color(0xFFFFCA28)),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Row(
+                    children: [
+                      Icon(Icons.workspace_premium_outlined, color: Color(0xFFF59E0B), size: 18),
+                      SizedBox(width: 6),
+                      Text('Harga Emas Murni (24K) Snapshot', style: TextStyle(color: Color(0xFF92400E), fontSize: 13, fontWeight: FontWeight.bold)),
+                    ],
+                  ),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                    decoration: BoxDecoration(color: const Color(0xFFF59E0B), borderRadius: BorderRadius.circular(8)),
+                    child: const Text('LIVE', style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold)),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 6),
+              const Text('Rp 1.150.000 / gram', style: TextStyle(color: Color(0xFF78350F), fontSize: 22, fontWeight: FontWeight.bold)),
+              const Text('Update: Hari ini 10:00 WIB', style: TextStyle(color: Color(0xFF92400E), fontSize: 11)),
+              const SizedBox(height: 10),
+              const Divider(color: Color(0xFFFFCA28)),
+              const SizedBox(height: 4),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Text('Hasil Taksiran Pasar Emas', style: TextStyle(color: Color(0xFF92400E), fontSize: 12)),
+                  Builder(builder: (ctx) {
+                    final gross = double.tryParse(widget.grossWeightController.text) ?? 0;
+                    final Map<String, double> karatPcts = {
+                      '6K': 0.250, '10K': 0.417, '14K': 0.585, '16K': 0.666,
+                      '18K': 0.750, '20K': 0.833, '22K': 0.916, '24K': 0.999
+                    };
+                    final selectedKaratPct = karatPcts[widget.selectedKarat] ?? 0.0;
+                    final taksiran = (gross * 1150000 * selectedKaratPct).toInt();
+                    if (taksiran <= 0) {
+                      return const Text('Isi berat & kadar karat', style: TextStyle(color: Color(0xFFF59E0B), fontSize: 12));
+                    }
+                    return Text('Rp ${_formatCurrency(taksiran)}', style: const TextStyle(color: Color(0xFF78350F), fontSize: 15, fontWeight: FontWeight.bold));
+                  }),
+                ],
+              ),
+            ],
+          ),
+        ),
+
         const Text(
           'Jenis Jaminan Emas',
           style: TextStyle(color: AppColors.textDark, fontSize: 14, fontWeight: FontWeight.w600),
@@ -597,20 +557,58 @@ class _Step1CollateralViewState extends State<Step1CollateralView> {
         const SizedBox(height: 20),
 
         const Text(
-          'Kadar Karat Emas',
+          'Kadar Emas (Karat)',
           style: TextStyle(color: AppColors.textDark, fontSize: 14, fontWeight: FontWeight.w600),
         ),
         const SizedBox(height: 8),
-        DropdownButtonFormField<String>(
-          value: widget.selectedKarat,
-          hint: const Text('Pilih Karat', style: TextStyle(color: AppColors.textInputHint, fontSize: 15)),
-          decoration: _getInputDecoration(),
-          items: _goldKarats.map((krt) {
-            return DropdownMenuItem(value: krt, child: Text(krt, style: const TextStyle(fontSize: 15)));
-          }).toList(),
-          onChanged: widget.onKaratChanged,
-          validator: (value) => value == null ? 'Kadar karat emas wajib dipilih' : null,
-        ),
+        Builder(builder: (ctx) {
+          final karatOptions = [
+            {'label': '6K', 'pct': '25.0%'},
+            {'label': '10K', 'pct': '41.7%'},
+            {'label': '14K', 'pct': '58.5%'},
+            {'label': '16K', 'pct': '66.6%'},
+            {'label': '18K', 'pct': '75.0%'},
+            {'label': '20K', 'pct': '83.3%'},
+            {'label': '22K', 'pct': '91.6%'},
+            {'label': '24K', 'pct': '99.9%'},
+          ];
+          return Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: karatOptions.map((k) {
+              final isSelected = widget.selectedKarat == k['label'];
+              return GestureDetector(
+                onTap: () {
+                  widget.onKaratChanged(k['label']);
+                  // Trigger UI rebuild for estimated price Card
+                  setState(() {});
+                },
+                child: Container(
+                  width: 72,
+                  padding: const EdgeInsets.symmetric(vertical: 10),
+                  decoration: BoxDecoration(
+                    color: isSelected ? AppColors.primary : AppColors.inputBackground,
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(
+                      color: isSelected ? AppColors.primary : const Color(0xFFE2E8F0),
+                    ),
+                  ),
+                  child: Column(
+                    children: [
+                      Text(k['label']!, style: TextStyle(color: isSelected ? Colors.white : AppColors.textDark, fontSize: 14, fontWeight: FontWeight.bold)),
+                      Text(k['pct']!, style: TextStyle(color: isSelected ? Colors.white70 : AppColors.textMuted, fontSize: 10)),
+                    ],
+                  ),
+                ),
+              );
+            }).toList(),
+          );
+        }),
+        if (widget.selectedKarat == null)
+          const Padding(
+            padding: EdgeInsets.only(top: 6),
+            child: Text('Kadar karat wajib dipilih', style: TextStyle(color: Colors.red, fontSize: 12)),
+          ),
         const SizedBox(height: 20),
 
         Row(
@@ -629,9 +627,10 @@ class _Step1CollateralViewState extends State<Step1CollateralView> {
                     keyboardType: const TextInputType.numberWithOptions(decimal: true),
                     decoration: _getInputDecoration(hint: 'e.g. 10.45'),
                     style: const TextStyle(fontSize: 15),
+                    onChanged: (val) => setState(() {}),
                     validator: (value) {
                       if (value == null || value.trim().isEmpty) return 'Berat kotor wajib diisi';
-                      if (double.tryParse(value) == null) return 'Input angka tidak valid';
+                      if (double.tryParse(value) == null) return 'Angka tidak valid';
                       return null;
                     },
                   ),
@@ -655,7 +654,7 @@ class _Step1CollateralViewState extends State<Step1CollateralView> {
                     style: const TextStyle(fontSize: 15),
                     validator: (value) {
                       if (value == null || value.trim().isEmpty) return 'Berat bersih wajib diisi';
-                      if (double.tryParse(value) == null) return 'Input angka tidak valid';
+                      if (double.tryParse(value) == null) return 'Angka tidak valid';
                       return null;
                     },
                   ),
@@ -679,20 +678,22 @@ class _Step1CollateralViewState extends State<Step1CollateralView> {
             return DropdownMenuItem(value: cert, child: Text(cert, style: const TextStyle(fontSize: 15)));
           }).toList(),
           onChanged: widget.onCertificateChanged,
-          validator: (value) => value == null ? 'Keterangan sertifikasi emas wajib dipilih' : null,
+          validator: (value) => value == null ? 'Sertifikasi wajib dipilih' : null,
         ),
         const SizedBox(height: 20),
 
         const Text(
-          'Catatan / Deskripsi Fisik',
+          'Sistem Tebus',
           style: TextStyle(color: AppColors.textDark, fontSize: 14, fontWeight: FontWeight.w600),
         ),
         const SizedBox(height: 8),
-        TextFormField(
-          controller: widget.noteController,
-          maxLines: 3,
-          decoration: _getInputDecoration(hint: 'Contoh: Ada goresan sedikit di permukaan logam mulia...'),
-          style: const TextStyle(fontSize: 15),
+        DropdownButtonFormField<String>(
+          value: widget.emasSistemTebus,
+          decoration: _getInputDecoration(),
+          items: const [
+            DropdownMenuItem(value: 'Langsung Tebas', child: Text('Langsung Tebas')),
+          ],
+          onChanged: widget.onEmasSistemTebusChanged,
         ),
       ],
     );
@@ -702,50 +703,110 @@ class _Step1CollateralViewState extends State<Step1CollateralView> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text(
-          'Jenis Kendaraan',
-          style: TextStyle(color: AppColors.textDark, fontSize: 14, fontWeight: FontWeight.w600),
+        // ===== Card Orange: Taksiran Kendaraan =====
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(14),
+          margin: const EdgeInsets.only(bottom: 20),
+          decoration: BoxDecoration(
+            gradient: const LinearGradient(
+              colors: [Color(0xFFFFF3E0), Color(0xFFFFE0B2)],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: const Color(0xFFFB8C00)),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Row(
+                children: [
+                  Icon(Icons.two_wheeler_rounded, color: Color(0xFFF97316), size: 18),
+                  SizedBox(width: 6),
+                  Text('Estimasi Nilai Kendaraan', style: TextStyle(color: Color(0xFF7C2D12), fontSize: 13, fontWeight: FontWeight.bold)),
+                ],
+              ),
+              const SizedBox(height: 8),
+              const Text(
+                'Nilai taksiran jaminan kendaraan bermotor dihitung berdasarkan depresiasi 10% per tahun.',
+                style: TextStyle(color: Color(0xFF9A3412), fontSize: 12, height: 1.4),
+              ),
+              const SizedBox(height: 10),
+              const Divider(color: Color(0xFFFB8C00)),
+              const SizedBox(height: 4),
+              Builder(builder: (ctx) {
+                final yearStr = widget.vehicleYearController.text;
+                final year = int.tryParse(yearStr);
+                final hargaBaru = double.tryParse(
+                  widget.vehicleHargaBaruController.text.replaceAll('.', '').replaceAll(',', '')
+                ) ?? 0;
+                
+                if (year == null || hargaBaru <= 0) {
+                  return const Text(
+                    'Isi tahun pembelian & perkiraan harga baru untuk melihat taksiran',
+                    style: TextStyle(color: Color(0xFFF97316), fontSize: 12),
+                  );
+                }
+                
+                final ageYears = (DateTime.now().year - year).clamp(0, 26);
+                const depresiasi = 0.10;
+                final faktor = (1 - depresiasi * ageYears).clamp(0.3, 1.0);
+                final taksiran = (hargaBaru * faktor * 0.7).toInt();
+                
+                return Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text('Umur $ageYears tahun (LTV 70% pasar)', style: const TextStyle(color: Color(0xFF9A3412), fontSize: 11)),
+                    Text('Rp ${_formatCurrency(taksiran)}', style: const TextStyle(color: Color(0xFF7C2D12), fontSize: 15, fontWeight: FontWeight.bold)),
+                  ],
+                );
+              }),
+            ],
+          ),
         ),
-        const SizedBox(height: 8),
-        DropdownButtonFormField<String>(
-          value: widget.selectedVehicleType,
-          hint: const Text('Pilih Jenis Kendaraan', style: TextStyle(color: AppColors.textInputHint, fontSize: 15)),
-          decoration: _getInputDecoration(),
-          items: _vehicleTypes.map((vType) {
-            return DropdownMenuItem(value: vType, child: Text(vType, style: const TextStyle(fontSize: 15)));
-          }).toList(),
-          onChanged: widget.onVehicleTypeChanged,
-          validator: (value) => value == null ? 'Jenis kendaraan wajib dipilih' : null,
-        ),
-        const SizedBox(height: 20),
+        // ===== End Card Orange =====
 
         const Text(
-          'Merk Kendaraan',
-          style: TextStyle(color: AppColors.textDark, fontSize: 14, fontWeight: FontWeight.w600),
-        ),
-        const SizedBox(height: 8),
-        DropdownButtonFormField<String>(
-          value: widget.selectedBrand,
-          hint: const Text('Pilih Merk Kendaraan', style: TextStyle(color: AppColors.textInputHint, fontSize: 15)),
-          decoration: _getInputDecoration(),
-          items: _vehicleBrands.map((vBrand) {
-            return DropdownMenuItem(value: vBrand, child: Text(vBrand, style: const TextStyle(fontSize: 15)));
-          }).toList(),
-          onChanged: widget.onBrandChanged,
-          validator: (value) => value == null ? 'Merk kendaraan wajib dipilih' : null,
-        ),
-        const SizedBox(height: 20),
-
-        const Text(
-          'Tipe / Model',
+          'Merk / Tipe Kendaraan',
           style: TextStyle(color: AppColors.textDark, fontSize: 14, fontWeight: FontWeight.w600),
         ),
         const SizedBox(height: 8),
         TextFormField(
-          controller: widget.modelController,
-          decoration: _getInputDecoration(hint: 'Contoh: Honda PCX 160 ABS / Toyota Avanza G'),
+          controller: widget.vehicleBrandTypeController,
+          decoration: _getInputDecoration(hint: 'Contoh: Honda CB150R / Toyota Avanza'),
           style: const TextStyle(fontSize: 15),
-          validator: (value) => (value == null || value.trim().isEmpty) ? 'Tipe kendaraan wajib diisi' : null,
+          validator: (value) => (value == null || value.trim().isEmpty) ? 'Merk & tipe kendaraan wajib diisi' : null,
+        ),
+        const SizedBox(height: 20),
+
+        const Text(
+          'Perkiraan Harga Baru (Rp)',
+          style: TextStyle(color: AppColors.textDark, fontSize: 14, fontWeight: FontWeight.w600),
+        ),
+        const SizedBox(height: 8),
+        TextFormField(
+          controller: widget.vehicleHargaBaruController,
+          keyboardType: TextInputType.number,
+          decoration: _getInputDecoration(hint: 'Contoh: 25.000.000'),
+          style: const TextStyle(fontSize: 15),
+          onChanged: (value) {
+            if (value.isEmpty) return;
+            final clean = value.replaceAll(RegExp(r'[^0-9]'), '');
+            final val = int.tryParse(clean) ?? 0;
+            final formatted = val > 0 ? _formatCurrency(val) : '';
+            widget.vehicleHargaBaruController.value = TextEditingValue(
+              text: formatted,
+              selection: TextSelection.collapsed(offset: formatted.length),
+            );
+            setState(() {});
+          },
+          validator: (value) {
+            if (value == null || value.trim().isEmpty) return 'Harga baru wajib diisi';
+            final clean = value.replaceAll(RegExp(r'[^0-9]'), '');
+            if (int.tryParse(clean) == null || int.parse(clean) <= 0) return 'Harga baru tidak valid';
+            return null;
+          },
         ),
         const SizedBox(height: 20),
 
@@ -756,19 +817,24 @@ class _Step1CollateralViewState extends State<Step1CollateralView> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   const Text(
-                    'Tahun Pembuatan',
+                    'Tahun Pembelian',
                     style: TextStyle(color: AppColors.textDark, fontSize: 14, fontWeight: FontWeight.w600),
                   ),
                   const SizedBox(height: 8),
                   TextFormField(
                     controller: widget.vehicleYearController,
                     keyboardType: TextInputType.number,
+                    maxLength: 4,
                     decoration: _getInputDecoration(hint: 'e.g. 2021'),
                     style: const TextStyle(fontSize: 15),
+                    onChanged: (val) => setState(() {}),
                     validator: (value) {
                       if (value == null || value.trim().isEmpty) return 'Tahun wajib diisi';
                       final year = int.tryParse(value);
-                      if (year == null || year < 1990 || year > DateTime.now().year + 1) return 'Tahun tidak valid';
+                      final currentYear = DateTime.now().year;
+                      if (year == null || year < 2000 || year > currentYear) {
+                        return 'Tahun tidak valid (Min 2000)';
+                      }
                       return null;
                     },
                   ),
@@ -786,7 +852,8 @@ class _Step1CollateralViewState extends State<Step1CollateralView> {
                   ),
                   const SizedBox(height: 8),
                   TextFormField(
-                    controller: widget.plateNumberController,
+                    controller: widget.vehicleNoPolisiController,
+                    textCapitalization: TextCapitalization.characters,
                     decoration: _getInputDecoration(hint: 'Contoh: L 1234 ABC'),
                     style: const TextStyle(fontSize: 15),
                     validator: (value) => (value == null || value.trim().isEmpty) ? 'Nomor plat wajib diisi' : null,
@@ -804,14 +871,51 @@ class _Step1CollateralViewState extends State<Step1CollateralView> {
         ),
         const SizedBox(height: 8),
         DropdownButtonFormField<String>(
-          value: widget.selectedCondition,
+          value: widget.selectedVehicleCondition,
           hint: const Text('Pilih Kondisi Fisik & Mesin', style: TextStyle(color: AppColors.textInputHint, fontSize: 15)),
           decoration: _getInputDecoration(),
           items: _vehicleConditions.map((cond) {
             return DropdownMenuItem(value: cond, child: Text(cond, style: const TextStyle(fontSize: 15)));
           }).toList(),
-          onChanged: widget.onConditionChanged,
+          onChanged: widget.onVehicleConditionChanged,
           validator: (value) => value == null ? 'Kondisi kendaraan wajib dipilih' : null,
+        ),
+        const SizedBox(height: 20),
+
+        const Text(
+          'Nomor Identitas Kendaraan',
+          style: TextStyle(color: AppColors.textDark, fontSize: 14, fontWeight: FontWeight.w600),
+        ),
+        const SizedBox(height: 8),
+        TextFormField(
+          controller: widget.vehicleNoMesinController,
+          textCapitalization: TextCapitalization.characters,
+          decoration: _getInputDecoration(hint: 'Nomor Mesin (auto-uppercase)'),
+          style: const TextStyle(fontSize: 15),
+          validator: (value) => (value == null || value.trim().isEmpty) ? 'Nomor mesin wajib diisi' : null,
+        ),
+        const SizedBox(height: 12),
+        TextFormField(
+          controller: widget.vehicleNoRangkaController,
+          textCapitalization: TextCapitalization.characters,
+          decoration: _getInputDecoration(hint: 'Nomor Rangka (auto-uppercase)'),
+          style: const TextStyle(fontSize: 15),
+          validator: (value) => (value == null || value.trim().isEmpty) ? 'Nomor rangka wajib diisi' : null,
+        ),
+        const SizedBox(height: 20),
+
+        const Text(
+          'Sistem Tebus',
+          style: TextStyle(color: AppColors.textDark, fontSize: 14, fontWeight: FontWeight.w600),
+        ),
+        const SizedBox(height: 8),
+        DropdownButtonFormField<String>(
+          value: widget.vehicleSistemTebus,
+          decoration: _getInputDecoration(),
+          items: const [
+            DropdownMenuItem(value: 'Langsung Tebas', child: Text('Langsung Tebas')),
+          ],
+          onChanged: widget.onVehicleSistemTebusChanged,
         ),
         const SizedBox(height: 20),
 

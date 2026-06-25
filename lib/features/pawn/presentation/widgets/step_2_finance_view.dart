@@ -7,6 +7,7 @@ class Step2FinanceView extends StatelessWidget {
   final String selectedPeriod;
   final ValueChanged<String?> onPeriodChanged;
   final VoidCallback onAmountChanged;
+  final int maxTaksiran;
 
   const Step2FinanceView({
     super.key,
@@ -15,6 +16,7 @@ class Step2FinanceView extends StatelessWidget {
     required this.selectedPeriod,
     required this.onPeriodChanged,
     required this.onAmountChanged,
+    required this.maxTaksiran,
   });
 
   String _formatCurrency(int val) {
@@ -45,10 +47,11 @@ class Step2FinanceView extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final pawnAmt = _pawnAmountValue;
-    final periodDays = selectedPeriod == '15 Hari' ? 15 : (selectedPeriod == '30 Hari' ? 30 : 60);
+    final periodDays = selectedPeriod == '15 Hari' ? 15 : 30;
 
-    // Dynamic calculations matching mockup values
-    final int dailyFee = ((pawnAmt * 0.01428) / 100).round() * 100; // rounded to nearest 100
+    // Formula SRS: Rhari = ⌈N / 500.000⌉ × 5.000
+    final int ceilTiers = pawnAmt > 0 ? ((pawnAmt / 500000).ceil()) : 0;
+    final int dailyFee = ceilTiers * 5000;
     final int totalFee = dailyFee * periodDays;
     final int totalRepayment = pawnAmt + totalFee;
 
@@ -58,7 +61,7 @@ class Step2FinanceView extends StatelessWidget {
     final String dateStart = _formatIndonesianDate(today);
     final String dateEnd = _formatIndonesianDate(dueDate);
 
-    final List<String> periods = ['15 Hari', '30 Hari', '60 Hari'];
+    final List<String> periods = ['15 Hari', '30 Hari'];
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
@@ -138,19 +141,24 @@ class Step2FinanceView extends StatelessWidget {
                 if (value == null || value.isEmpty) {
                   return 'Nominal gadai tidak boleh kosong';
                 }
-                if (_pawnAmountValue <= 0) {
+                final amt = _pawnAmountValue;
+                if (amt <= 0) {
                   return 'Nominal gadai harus lebih dari 0';
+                }
+                if (amt > maxTaksiran) {
+                  return 'Maksimal Rp ${_formatCurrency(maxTaksiran)} sesuai taksiran jaminan';
                 }
                 return null;
               },
             ),
             const SizedBox(height: 6),
             // Limit text
-            const Text(
-              'Maks. Rp 1.000.000 (80% taksiran)',
-              style: TextStyle(
+            Text(
+              'Maks. Rp ${_formatCurrency(maxTaksiran)} (Sesuai taksiran jaminan)',
+              style: const TextStyle(
                 color: AppColors.textMuted,
                 fontSize: 12,
+                fontWeight: FontWeight.w500,
               ),
             ),
             const SizedBox(height: 24),

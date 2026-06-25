@@ -76,15 +76,26 @@ class _ExtensionPageState extends State<ExtensionPage> {
 
   void _processExtension(PawnTransaction tx) {
     final days = _selectedExtensionPeriod == '15 Hari' ? 15 : 30;
-    
+    final oldDueDate = tx.dateDue;
+    final jatipDibayar = tx.totalFee;
+
     setState(() {
-      // Apply business rollover logic:
-      // 1. Shift date due
-      tx.dateDue = tx.dateDue.add(Duration(days: days));
-      // 2. Reset status to Aktif (if it was Macet)
+      // Catat ke riwayat perpanjangan
+      mockExtensionHistory.add(ExtensionHistory(
+        id: 'EXT${DateTime.now().millisecondsSinceEpoch}',
+        transactionId: tx.id,
+        jatipDibayar: jatipDibayar,
+        tglPerpanjangan: DateTime.now(),
+        tglTempoLama: oldDueDate,
+        tglTempoBaru: oldDueDate.add(Duration(days: days)),
+      ));
+      // Apply business rollover logic
+      tx.dateDue = oldDueDate.add(Duration(days: days));
       tx.status = 'Aktif';
-      // 3. Re-calculate fees for future (we can update dateApplied to reset current bill)
       tx.dateApplied = DateTime.now();
+      tx.periodDays = days;
+      tx.totalFee = tx.dailyFee * days;
+      tx.totalRepayment = tx.principal + tx.totalFee;
     });
 
     _showSuccessDialog(tx, days);

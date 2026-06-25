@@ -49,53 +49,71 @@ class _LoginScreenState extends State<LoginScreen> {
                     // Top Blue Header Section
                     Container(
                       padding: EdgeInsets.only(
-                        top: MediaQuery.of(context).padding.top + 40,
+                        top: MediaQuery.of(context).padding.top + 16,
                         bottom: 40,
                         left: 24,
                         right: 24,
                       ),
                       width: double.infinity,
                       child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          // Rotated Square Logo (Diamond shape)
-                          Transform.rotate(
-                            angle: 45 * math.pi / 180,
+                          GestureDetector(
+                            onTap: () => Navigator.pop(context),
                             child: Container(
-                              width: 44,
-                              height: 44,
+                              padding: const EdgeInsets.all(8),
                               decoration: BoxDecoration(
-                                color: Colors.white,
-                                borderRadius: BorderRadius.circular(4),
-                                boxShadow: [
-                                  BoxShadow(
-                                    color: Colors.black.withValues(alpha: 0.1),
-                                    blurRadius: 10,
-                                    offset: const Offset(0, 4),
-                                  ),
-                                ],
+                                color: Colors.white.withValues(alpha: 0.15),
+                                borderRadius: BorderRadius.circular(10),
                               ),
+                              child: const Icon(Icons.arrow_back_rounded, color: Colors.white, size: 20),
                             ),
                           ),
                           const SizedBox(height: 24),
-                          // Title
-                          const Text(
-                            'Galaxi Gadai',
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontSize: 26,
-                              fontWeight: FontWeight.bold,
-                              letterSpacing: 0.5,
-                            ),
-                          ),
-                          const SizedBox(height: 6),
-                          // Subtitle
-                          Text(
-                            'Sistem Gadai Terpercaya',
-                            style: TextStyle(
-                              color: Colors.white.withValues(alpha: 0.8),
-                              fontSize: 14,
-                              fontWeight: FontWeight.w400,
+                          Center(
+                            child: Column(
+                              children: [
+                                // Rotated Square Logo (Diamond shape)
+                                Transform.rotate(
+                                  angle: 45 * math.pi / 180,
+                                  child: Container(
+                                    width: 44,
+                                    height: 44,
+                                    decoration: BoxDecoration(
+                                      color: Colors.white,
+                                      borderRadius: BorderRadius.circular(4),
+                                      boxShadow: [
+                                        BoxShadow(
+                                          color: Colors.black.withValues(alpha: 0.1),
+                                          blurRadius: 10,
+                                          offset: const Offset(0, 4),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(height: 24),
+                                // Title
+                                const Text(
+                                  'Galaxi Gadai',
+                                  style: TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 26,
+                                    fontWeight: FontWeight.bold,
+                                    letterSpacing: 0.5,
+                                  ),
+                                ),
+                                const SizedBox(height: 6),
+                                // Subtitle
+                                Text(
+                                  'Login Verifikator / Toko',
+                                  style: TextStyle(
+                                    color: Colors.white.withValues(alpha: 0.8),
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w400,
+                                  ),
+                                ),
+                              ],
                             ),
                           ),
                         ],
@@ -352,42 +370,32 @@ class _LoginScreenState extends State<LoginScreen> {
                                   ),
                                 ),
                               ),
-                              const SizedBox(height: 32),
-
-                              // Register Link
-                              Center(
-                                child: Row(
-                                  mainAxisAlignment: MainAxisAlignment.center,
-                                  children: [
-                                    const Text(
-                                      'Belum punya akun? ',
-                                      style: TextStyle(
-                                        color: AppColors.textMuted,
-                                        fontSize: 14,
-                                      ),
-                                    ),
-                                    GestureDetector(
-                                      onTap: () {
-                                        ScaffoldMessenger.of(context).showSnackBar(
-                                          const SnackBar(
-                                            content: Text('Menuju halaman pendaftaran'),
-                                            behavior: SnackBarBehavior.floating,
-                                          ),
-                                        );
-                                      },
-                                      child: const Text(
-                                        'Daftar Sekarang',
-                                        style: TextStyle(
-                                          color: AppColors.primary,
-                                          fontWeight: FontWeight.w600,
-                                          fontSize: 14,
-                                        ),
-                                      ),
-                                    ),
-                                  ],
+                              const SizedBox(height: 24),
+                              Row(
+                                children: [
+                                  const Expanded(child: Divider(color: Color(0xFFE2E8F0))),
+                                  Padding(
+                                    padding: const EdgeInsets.symmetric(horizontal: 12),
+                                    child: Text('atau', style: TextStyle(color: AppColors.textMuted, fontSize: 13)),
+                                  ),
+                                  const Expanded(child: Divider(color: Color(0xFFE2E8F0))),
+                                ],
+                              ),
+                              const SizedBox(height: 16),
+                              SizedBox(
+                                width: double.infinity,
+                                height: 48,
+                                child: OutlinedButton.icon(
+                                  onPressed: () => Navigator.pop(context),
+                                  icon: const Icon(Icons.grid_view_rounded, size: 18),
+                                  label: const Text('Pilih Role Lain', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
+                                  style: OutlinedButton.styleFrom(
+                                    foregroundColor: AppColors.primary,
+                                    side: const BorderSide(color: AppColors.primary),
+                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                  ),
                                 ),
                               ),
-                              
                               const Spacer(),
                               
                               // Footer Section

@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:galaxi_gadai/core/constants/app_colors.dart';
-import 'package:galaxi_gadai/features/auth/presentation/pages/login_page.dart';
+import 'package:galaxi_gadai/features/auth/presentation/pages/role_portal_page.dart';
 
 void main() {
   // Set system navigation bar and status bar theme
@@ -28,9 +28,9 @@ class MyApp extends StatelessWidget {
           primary: AppColors.primary,
         ),
         useMaterial3: true,
-        fontFamily: 'Roboto', // Default clean font
+        fontFamily: 'Roboto',
       ),
-      home: const LoginScreen(),
+      home: const RolePortalPage(),
     );
   }
 }

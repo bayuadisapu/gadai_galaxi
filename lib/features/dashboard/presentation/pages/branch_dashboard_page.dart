@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:galaxi_gadai/core/constants/app_colors.dart';
+import 'package:galaxi_gadai/features/auth/presentation/pages/role_portal_page.dart';
 import 'package:galaxi_gadai/features/customer/presentation/pages/customer_search_page.dart';
 import '../widgets/home_tab_content.dart';
 import '../widgets/transaksi_tab_content.dart';
 import '../widgets/laporan_tab_content.dart';
+import '../widgets/notification_panel.dart';
 
 class BranchDashboardPage extends StatefulWidget {
   const BranchDashboardPage({super.key});
@@ -15,6 +17,31 @@ class BranchDashboardPage extends StatefulWidget {
 class _BranchDashboardPageState extends State<BranchDashboardPage> {
   int _currentNavigationIndex = 0; // 0: Dashboard, 1: Transaksi, 2: Nasabah, 3: Laporan
   String _txInitialFilter = 'Semua';
+
+  void _logout() {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Text('Keluar Akun'),
+        content: const Text('Yakin ingin keluar dari akun toko?'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Batal')),
+          TextButton(
+            onPressed: () {
+              Navigator.pop(ctx);
+              Navigator.pushAndRemoveUntil(
+                context,
+                MaterialPageRoute(builder: (context) => const RolePortalPage()),
+                (route) => false,
+              );
+            },
+            child: const Text('Keluar', style: TextStyle(color: Colors.red)),
+          ),
+        ],
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -104,49 +131,52 @@ class _BranchDashboardPageState extends State<BranchDashboardPage> {
                       Row(
                         children: [
                           // Bell Notification Icon with Badge
-                          Stack(
-                            children: [
-                              const Icon(
-                                Icons.notifications_none_rounded,
-                                color: Colors.white,
-                                size: 26,
-                              ),
-                              Positioned(
-                                right: 3,
-                                top: 3,
-                                child: Container(
-                                  width: 8,
-                                  height: 8,
-                                  decoration: const BoxDecoration(
-                                    color: Color(0xFFEF4444),
-                                    shape: BoxShape.circle,
+                          GestureDetector(
+                            onTap: () => showNotificationPanel(context),
+                            child: Stack(
+                              children: [
+                                const Icon(
+                                  Icons.notifications_none_rounded,
+                                  color: Colors.white,
+                                  size: 26,
+                                ),
+                                Positioned(
+                                  right: 3,
+                                  top: 3,
+                                  child: Container(
+                                    width: 8,
+                                    height: 8,
+                                    decoration: const BoxDecoration(
+                                      color: Color(0xFFEF4444),
+                                      shape: BoxShape.circle,
+                                    ),
                                   ),
                                 ),
-                              ),
-                            ],
+                              ],
+                            ),
                           ),
                           const SizedBox(width: 16),
                           
-                          // Profile Photo (Circular Placeholder)
-                          Container(
-                            width: 40,
-                            height: 40,
-                            decoration: BoxDecoration(
-                              shape: BoxShape.circle,
-                              border: Border.all(
-                                color: Colors.white.withValues(alpha: 0.6),
-                                width: 1.5,
+                          // Profile Photo with Logout
+                          GestureDetector(
+                            onTap: _logout,
+                            child: Container(
+                              width: 40,
+                              height: 40,
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                border: Border.all(
+                                  color: Colors.white.withValues(alpha: 0.6),
+                                  width: 1.5,
+                                ),
+                                color: Colors.white24,
                               ),
-                              color: Colors.white24,
-                            ),
-                            child: const ClipOval(
-                              child: Center(
-                                child: Text(
-                                  'B', // B for Budi
-                                  style: TextStyle(
+                              child: const ClipOval(
+                                child: Center(
+                                  child: Icon(
+                                    Icons.logout_rounded,
                                     color: Colors.white,
-                                    fontWeight: FontWeight.bold,
-                                    fontSize: 16,
+                                    size: 18,
                                   ),
                                 ),
                               ),

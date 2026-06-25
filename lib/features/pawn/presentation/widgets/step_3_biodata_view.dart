@@ -319,6 +319,10 @@ class _Step3BiodataViewState extends State<Step3BiodataView> {
                 if (value == null || value.trim().isEmpty) {
                   return 'Nomor telepon tidak boleh kosong';
                 }
+                final reg = RegExp(r'^(08|\+628)[0-9]{8,11}$');
+                if (!reg.hasMatch(value.trim())) {
+                  return 'Nomor HP tidak valid (Gunakan 08xx atau +628xx, 10-13 digit)';
+                }
                 return null;
               },
             ),

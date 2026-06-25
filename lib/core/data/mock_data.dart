@@ -28,7 +28,7 @@ class PawnTransaction {
   final String model;
   final String condition;
   final int principal;
-  final int periodDays;
+  int periodDays;
   final int dailyFee;
   int totalFee;
   int totalRepayment;
@@ -151,3 +151,36 @@ final List<PawnTransaction> mockTransactions = [
     status: 'Macet',
   ),
 ];
+
+class ExtensionHistory {
+  final String id;
+  final String transactionId;
+  final int jatipDibayar;
+  final DateTime tglPerpanjangan;
+  final DateTime tglTempoLama;
+  final DateTime tglTempoBaru;
+
+  ExtensionHistory({
+    required this.id,
+    required this.transactionId,
+    required this.jatipDibayar,
+    required this.tglPerpanjangan,
+    required this.tglTempoLama,
+    required this.tglTempoBaru,
+  });
+}
+
+final List<ExtensionHistory> mockExtensionHistory = [];
+
+// Mock akun nasabah: phone -> { password, customerId }
+final Map<String, Map<String, String>> mockNasabahAccounts = {
+  '081234567890': {
+    'password': 'demo123',
+    'customerId': 'C001',
+  },
+  '082345678901': {
+    'password': 'demo123',
+    'customerId': 'C002',
+  },
+};
+

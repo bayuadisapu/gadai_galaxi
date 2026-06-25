@@ -1,0 +1,321 @@
+import 'package:flutter/material.dart';
+import 'package:galaxi_gadai/core/constants/app_colors.dart';
+import 'package:galaxi_gadai/core/data/mock_data.dart';
+import 'nasabah_login_page.dart';
+
+class RegisterPage extends StatefulWidget {
+  const RegisterPage({super.key});
+
+  @override
+  State<RegisterPage> createState() => _RegisterPageState();
+}
+
+class _RegisterPageState extends State<RegisterPage> {
+  final _formKey = GlobalKey<FormState>();
+  final _nameController = TextEditingController();
+  final _phoneController = TextEditingController();
+  final _nikController = TextEditingController();
+  final _passwordController = TextEditingController();
+  final _confirmPasswordController = TextEditingController();
+  bool _obscurePassword = true;
+  bool _obscureConfirm = true;
+  bool _isLoading = false;
+
+  @override
+  void dispose() {
+    _nameController.dispose();
+    _phoneController.dispose();
+    _nikController.dispose();
+    _passwordController.dispose();
+    _confirmPasswordController.dispose();
+    super.dispose();
+  }
+
+  void _handleRegister() async {
+    if (!_formKey.currentState!.validate()) return;
+    setState(() => _isLoading = true);
+    await Future.delayed(const Duration(milliseconds: 800));
+
+    final newCustomer = Customer(
+      id: 'NS${DateTime.now().millisecondsSinceEpoch}',
+      name: _nameController.text.trim(),
+      nik: _nikController.text.trim(),
+      birthPlace: '-',
+      birthDate: '-',
+      gender: '-',
+      phone: _phoneController.text.trim(),
+      address: '-',
+    );
+    mockCustomers.add(newCustomer);
+    mockNasabahAccounts[_phoneController.text.trim()] = {
+      'password': _passwordController.text,
+      'customerId': newCustomer.id,
+    };
+
+    if (!mounted) return;
+    setState(() => _isLoading = false);
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Akun berhasil dibuat! Silakan login.'),
+        backgroundColor: Color(0xFF10B981),
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+    Navigator.pushReplacement(
+      context,
+      MaterialPageRoute(builder: (context) => const NasabahLoginPage()),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: AppColors.background,
+      body: LayoutBuilder(
+        builder: (context, constraints) {
+          return SingleChildScrollView(
+            child: ConstrainedBox(
+              constraints: BoxConstraints(minHeight: constraints.maxHeight),
+              child: IntrinsicHeight(
+                child: Column(
+                  children: [
+                    // Header
+                    Container(
+                      padding: EdgeInsets.only(
+                        top: MediaQuery.of(context).padding.top + 32,
+                        bottom: 32,
+                        left: 24,
+                        right: 24,
+                      ),
+                      width: double.infinity,
+                      child: Column(
+                        children: [
+                          Container(
+                            width: 56,
+                            height: 56,
+                            decoration: BoxDecoration(
+                              color: Colors.white.withValues(alpha: 0.2),
+                              shape: BoxShape.circle,
+                            ),
+                            child: const Icon(
+                              Icons.person_add_alt_1_rounded,
+                              color: Colors.white,
+                              size: 28,
+                            ),
+                          ),
+                          const SizedBox(height: 16),
+                          const Text(
+                            'Daftar Akun Nasabah',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 24,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          const SizedBox(height: 6),
+                          Text(
+                            'Buat akun untuk mulai mengajukan gadai',
+                            style: TextStyle(
+                              color: Colors.white.withValues(alpha: 0.8),
+                              fontSize: 14,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+
+                    // Form Card
+                    Expanded(
+                      child: Container(
+                        width: double.infinity,
+                        decoration: const BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.only(
+                            topLeft: Radius.circular(32),
+                            topRight: Radius.circular(32),
+                          ),
+                        ),
+                        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
+                        child: Form(
+                          key: _formKey,
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              _buildLabel('Nama Lengkap'),
+                              const SizedBox(height: 8),
+                              _buildTextField(
+                                controller: _nameController,
+                                hint: 'Sesuai KTP',
+                                icon: Icons.badge_outlined,
+                                validator: (v) => v == null || v.trim().isEmpty ? 'Nama tidak boleh kosong' : null,
+                              ),
+                              const SizedBox(height: 20),
+                              _buildLabel('Nomor HP (untuk login)'),
+                              const SizedBox(height: 8),
+                              _buildTextField(
+                                controller: _phoneController,
+                                hint: '08xxxxxxxxxx',
+                                icon: Icons.phone_outlined,
+                                keyboardType: TextInputType.phone,
+                                validator: (v) {
+                                  if (v == null || v.trim().isEmpty) return 'Nomor HP tidak boleh kosong';
+                                  if (!RegExp(r'^08[0-9]{8,11}$').hasMatch(v.trim())) return 'Format nomor HP tidak valid';
+                                  return null;
+                                },
+                              ),
+                              const SizedBox(height: 20),
+                              _buildLabel('NIK (16 digit)'),
+                              const SizedBox(height: 8),
+                              _buildTextField(
+                                controller: _nikController,
+                                hint: '3578XXXXXXXXXXXX',
+                                icon: Icons.credit_card_outlined,
+                                keyboardType: TextInputType.number,
+                                validator: (v) {
+                                  if (v == null || v.trim().isEmpty) return 'NIK tidak boleh kosong';
+                                  if (v.trim().length != 16) return 'NIK harus 16 digit';
+                                  return null;
+                                },
+                              ),
+                              const SizedBox(height: 20),
+                              _buildLabel('Kata Sandi'),
+                              const SizedBox(height: 8),
+                              _buildTextField(
+                                controller: _passwordController,
+                                hint: 'Minimal 6 karakter',
+                                icon: Icons.lock_outline_rounded,
+                                obscureText: _obscurePassword,
+                                suffixIcon: IconButton(
+                                  icon: Icon(
+                                    _obscurePassword ? Icons.visibility_outlined : Icons.visibility_off_outlined,
+                                    color: AppColors.textMuted,
+                                    size: 20,
+                                  ),
+                                  onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
+                                ),
+                                validator: (v) {
+                                  if (v == null || v.isEmpty) return 'Kata sandi tidak boleh kosong';
+                                  if (v.length < 6) return 'Minimal 6 karakter';
+                                  return null;
+                                },
+                              ),
+                              const SizedBox(height: 20),
+                              _buildLabel('Konfirmasi Kata Sandi'),
+                              const SizedBox(height: 8),
+                              _buildTextField(
+                                controller: _confirmPasswordController,
+                                hint: 'Ulangi kata sandi',
+                                icon: Icons.lock_outline_rounded,
+                                obscureText: _obscureConfirm,
+                                suffixIcon: IconButton(
+                                  icon: Icon(
+                                    _obscureConfirm ? Icons.visibility_outlined : Icons.visibility_off_outlined,
+                                    color: AppColors.textMuted,
+                                    size: 20,
+                                  ),
+                                  onPressed: () => setState(() => _obscureConfirm = !_obscureConfirm),
+                                ),
+                                validator: (v) {
+                                  if (v != _passwordController.text) return 'Kata sandi tidak cocok';
+                                  return null;
+                                },
+                              ),
+                              const SizedBox(height: 32),
+                              SizedBox(
+                                width: double.infinity,
+                                height: 52,
+                                child: ElevatedButton(
+                                  onPressed: _isLoading ? null : _handleRegister,
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: AppColors.primary,
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(12),
+                                    ),
+                                    elevation: 0,
+                                  ),
+                                  child: _isLoading
+                                      ? const SizedBox(
+                                          width: 20,
+                                          height: 20,
+                                          child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
+                                        )
+                                      : const Text(
+                                          'Buat Akun',
+                                          style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w600),
+                                        ),
+                                ),
+                              ),
+                              const SizedBox(height: 20),
+                              Center(
+                                child: Row(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    const Text('Sudah punya akun? ', style: TextStyle(color: AppColors.textMuted, fontSize: 14)),
+                                    GestureDetector(
+                                      onTap: () => Navigator.pop(context),
+                                      child: const Text(
+                                        'Masuk',
+                                        style: TextStyle(color: AppColors.primary, fontWeight: FontWeight.w600, fontSize: 14),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildLabel(String text) {
+    return Text(
+      text,
+      style: const TextStyle(color: AppColors.textInputLabel, fontSize: 14, fontWeight: FontWeight.w600),
+    );
+  }
+
+  Widget _buildTextField({
+    required TextEditingController controller,
+    required String hint,
+    required IconData icon,
+    TextInputType keyboardType = TextInputType.text,
+    bool obscureText = false,
+    Widget? suffixIcon,
+    String? Function(String?)? validator,
+  }) {
+    return TextFormField(
+      controller: controller,
+      keyboardType: keyboardType,
+      obscureText: obscureText,
+      decoration: InputDecoration(
+        hintText: hint,
+        hintStyle: const TextStyle(color: AppColors.textInputHint, fontSize: 15),
+        prefixIcon: Icon(icon, color: AppColors.textMuted, size: 22),
+        suffixIcon: suffixIcon,
+        filled: true,
+        fillColor: AppColors.inputBackground,
+        contentPadding: const EdgeInsets.symmetric(vertical: 16, horizontal: 16),
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: const BorderSide(color: AppColors.inputFocusedBorder, width: 1.5),
+        ),
+        errorBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: const BorderSide(color: Colors.red, width: 1),
+        ),
+      ),
+      style: const TextStyle(color: AppColors.textDark, fontSize: 15),
+      validator: validator,
+    );
+  }
+}
