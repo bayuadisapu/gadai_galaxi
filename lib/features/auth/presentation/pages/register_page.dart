@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:galaxi_gadai/core/constants/app_colors.dart';
 import 'package:galaxi_gadai/core/data/mock_data.dart';
@@ -21,7 +22,6 @@ class _RegisterPageState extends State<RegisterPage> {
   bool _obscurePassword = true;
   bool _obscureConfirm = true;
   bool _isLoading = false;
-  String? _errorMessage;
 
   final _svc = SupabaseGadaiService.instance;
 
@@ -37,7 +37,7 @@ class _RegisterPageState extends State<RegisterPage> {
 
   void _handleRegister() async {
     if (!_formKey.currentState!.validate()) return;
-    setState(() { _isLoading = true; _errorMessage = null; });
+    setState(() { _isLoading = true; });
 
     try {
       // Fetch first branch as default
@@ -63,6 +63,13 @@ class _RegisterPageState extends State<RegisterPage> {
         created.id,
       );
 
+      // Log aktivitas registrasi
+      unawaited(_svc.logNasabahRegister(
+        created.id,
+        created.name,
+        created.phone,
+      ));
+
       if (!mounted) return;
       setState(() => _isLoading = false);
       ScaffoldMessenger.of(context).showSnackBar(
@@ -78,12 +85,16 @@ class _RegisterPageState extends State<RegisterPage> {
       );
     } catch (e) {
       if (!mounted) return;
-      setState(() {
-        _isLoading = false;
-        _errorMessage = e.toString().contains('unique')
-            ? 'Nomor HP sudah terdaftar'
-            : 'Error: ${e.toString()}';
-      });
+      setState(() => _isLoading = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            e.toString().contains('unique') ? 'Nomor HP sudah terdaftar' : 'Error: ${e.toString()}',
+          ),
+          backgroundColor: Colors.red,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
     }
   }
 

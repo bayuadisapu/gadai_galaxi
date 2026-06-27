@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:galaxi_gadai/core/constants/app_colors.dart';
 import 'package:galaxi_gadai/core/data/mock_data.dart';
@@ -311,10 +312,13 @@ class _NewPawnPageState extends State<NewPawnPage> {
             status: 'Aktif',
           );
 
-          await svc.createTransaction(newTx);
+          final createdTx = await svc.createTransaction(newTx);
 
           // Record admin fee to Tenant Wallet
           TenantWallet.topUp(10000, 'Admin Fee Gadai - $txModel ($_adminFeePaymentMethod)');
+
+          // Log transaksi baru
+          unawaited(svc.logTransaksiCreated(createdCust.id, createdTx.id, '$txBrand $txModel', pawnAmt));
 
           if (!mounted) return;
           setState(() => _isLoading = false);

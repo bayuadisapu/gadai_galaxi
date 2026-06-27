@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:galaxi_gadai/core/constants/app_colors.dart';
 import 'package:galaxi_gadai/core/data/mock_data.dart';
@@ -103,6 +104,9 @@ class _ExtensionPageState extends State<ExtensionPage> {
         tx.totalFee = newTotalFee;
         tx.totalRepayment = newTotalRepayment;
       });
+
+      // Log perpanjangan tenor
+      unawaited(_svc.logExtensionRequested(tx.customerId, tx.id));
 
       if (!mounted) return;
       _showSuccessDialog(tx, days);

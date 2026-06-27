@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:galaxi_gadai/core/constants/app_colors.dart';
 import 'package:galaxi_gadai/core/data/mock_data.dart';
 import 'package:galaxi_gadai/core/services/supabase_gadai_service.dart';
-import 'package:galaxi_gadai/core/config/system_config.dart';
 import 'package:galaxi_gadai/features/auth/presentation/pages/role_portal_page.dart';
 import 'package:galaxi_gadai/features/pawn/presentation/pages/new_pawn_page.dart';
 import 'package:galaxi_gadai/features/pawn/presentation/pages/transaksi_detail_page.dart';
@@ -38,6 +37,7 @@ class _AdminCabangDashboardPageState extends State<AdminCabangDashboardPage> {
   List<PawnTransaction> _txs = [];
   List<Customer> _customers = [];
   bool _isLoading = true;
+  int _walletBalance = 0;
 
   @override
   void initState() {
@@ -54,12 +54,17 @@ class _AdminCabangDashboardPageState extends State<AdminCabangDashboardPage> {
   Future<void> _loadData() async {
     setState(() => _isLoading = true);
     try {
+      // Auto-mark transaksi Aktif yang sudah lewat jatuh tempo → Macet
+      await _svc.markOverdueTransactions(branchId: widget.cabangId);
+
       final txs = await _svc.fetchTransactions(branchId: widget.cabangId);
       final customers = await _svc.fetchNasabah(branchId: widget.cabangId);
+      final walletBalance = await _svc.fetchWalletBalance(widget.cabangId);
       if (!mounted) return;
       setState(() {
         _txs = txs;
         _customers = customers;
+        _walletBalance = walletBalance;
         _isLoading = false;
       });
     } catch (_) {
@@ -121,13 +126,13 @@ class _AdminCabangDashboardPageState extends State<AdminCabangDashboardPage> {
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Batal')),
           ElevatedButton(
-            onPressed: () {
+            onPressed: () async {
               final amt = int.tryParse(amountCtrl.text) ?? 0;
               if (amt > 0) {
-                setState(() {
-                  TenantWallet.topUp(amt, 'Top Up Saldo Tenant');
-                });
                 Navigator.pop(ctx);
+                await _svc.walletTopUp(widget.cabangId, amt, 'Top Up Saldo Tenant');
+                await _loadData(); // refresh saldo dari Supabase
+                if (!mounted) return;
                 ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(
                     content: Text('Top Up Rp ${_formatCurrency(amt)} Berhasil!'),
@@ -347,7 +352,7 @@ class _AdminCabangDashboardPageState extends State<AdminCabangDashboardPage> {
                         ),
                         const SizedBox(height: 8),
                         Text(
-                          'Rp ${_formatCurrency(TenantWallet.balance)}',
+                          'Rp ${_formatCurrency(_walletBalance)}',
                           style: const TextStyle(color: Colors.white, fontSize: 26, fontWeight: FontWeight.bold),
                         ),
                         const SizedBox(height: 16),
@@ -369,7 +374,7 @@ class _AdminCabangDashboardPageState extends State<AdminCabangDashboardPage> {
                             Expanded(
                               child: TextButton.icon(
                                 onPressed: () {
-                                  Navigator.push(context, MaterialPageRoute(builder: (_) => const MutasiSaldoPage()));
+                                  Navigator.push(context, MaterialPageRoute(builder: (_) => MutasiSaldoPage(branchId: widget.cabangId)));
                                 },
                                 icon: const Icon(Icons.list_alt_rounded, color: Colors.white, size: 16),
                                 label: const Text('Mutasi', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13)),
@@ -490,7 +495,7 @@ class _AdminCabangDashboardPageState extends State<AdminCabangDashboardPage> {
                         Navigator.push(context, MaterialPageRoute(builder: (_) => HistoryTransaksiPage(branchId: widget.cabangId)));
                       }),
                       _buildGridItem('File Pendukung', Icons.folder_open_rounded, () {
-                        Navigator.push(context, MaterialPageRoute(builder: (_) => const FilePendukungPage()));
+                        Navigator.push(context, MaterialPageRoute(builder: (_) => FilePendukungPage(branchId: widget.cabangId)));
                       }),
                     ],
                   ),

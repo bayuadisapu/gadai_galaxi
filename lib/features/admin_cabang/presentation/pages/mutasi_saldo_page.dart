@@ -1,15 +1,44 @@
 import 'package:flutter/material.dart';
-import 'package:galaxi_gadai/core/config/system_config.dart';
 import 'package:galaxi_gadai/core/constants/app_colors.dart';
+import 'package:galaxi_gadai/core/services/supabase_gadai_service.dart';
 
 class MutasiSaldoPage extends StatefulWidget {
-  const MutasiSaldoPage({super.key});
+  final String branchId;
+  const MutasiSaldoPage({super.key, required this.branchId});
 
   @override
   State<MutasiSaldoPage> createState() => _MutasiSaldoPageState();
 }
 
 class _MutasiSaldoPageState extends State<MutasiSaldoPage> {
+  final _svc = SupabaseGadaiService.instance;
+  List<Map<String, dynamic>> _mutations = [];
+  int _balance = 0;
+  bool _isLoading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadData();
+  }
+
+  Future<void> _loadData() async {
+    setState(() => _isLoading = true);
+    try {
+      final balance = await _svc.fetchWalletBalance(widget.branchId);
+      final mutations = await _svc.fetchWalletMutations(widget.branchId);
+      if (!mounted) return;
+      setState(() {
+        _balance = balance;
+        _mutations = mutations;
+        _isLoading = false;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _isLoading = false);
+    }
+  }
+
   String _formatCurrency(int val) {
     final s = val.toString();
     final buf = StringBuffer();
@@ -27,86 +56,96 @@ class _MutasiSaldoPageState extends State<MutasiSaldoPage> {
 
   @override
   Widget build(BuildContext context) {
-    final list = TenantWallet.mutations;
     return Scaffold(
       backgroundColor: const Color(0xFFF8F7F0),
       appBar: AppBar(
         title: const Text('Mutasi Saldo Tenant', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
         backgroundColor: const Color(0xFF0F5A47),
         iconTheme: const IconThemeData(color: Colors.white),
-      ),
-      body: Column(
-        children: [
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.all(24),
-            decoration: const BoxDecoration(
-              color: Color(0xFF0F5A47),
-              borderRadius: BorderRadius.only(
-                bottomLeft: Radius.circular(24),
-                bottomRight: Radius.circular(24),
-              ),
-            ),
-            child: Column(
-              children: [
-                const Text('Saldo Saat Ini', style: TextStyle(color: Colors.white70, fontSize: 14)),
-                const SizedBox(height: 8),
-                Text(
-                  'Rp ${_formatCurrency(TenantWallet.balance)}',
-                  style: const TextStyle(color: Colors.white, fontSize: 28, fontWeight: FontWeight.bold),
-                ),
-              ],
-            ),
-          ),
-          Expanded(
-            child: list.isEmpty
-                ? const Center(child: Text('Belum ada riwayat mutasi saldo.'))
-                : ListView.separated(
-                    padding: const EdgeInsets.all(20),
-                    itemCount: list.length,
-                    separatorBuilder: (_, __) => const SizedBox(height: 12),
-                    itemBuilder: (context, i) {
-                      final item = list[i];
-                      final isKredit = item['type'] == 'Kredit';
-                      return Container(
-                        padding: const EdgeInsets.all(16),
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          borderRadius: BorderRadius.circular(16),
-                          border: Border.all(color: const Color(0xFFE2E8F0)),
-                        ),
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  item['desc'] as String,
-                                  style: const TextStyle(fontWeight: FontWeight.bold, color: AppColors.textDark),
-                                ),
-                                const SizedBox(height: 4),
-                                Text(
-                                  _formatDate(item['date'] as DateTime),
-                                  style: const TextStyle(color: AppColors.textMuted, fontSize: 11),
-                                ),
-                              ],
-                            ),
-                            Text(
-                              '${isKredit ? '+' : '-'} Rp ${_formatCurrency(item['amount'] as int)}',
-                              style: TextStyle(
-                                fontWeight: FontWeight.bold,
-                                color: isKredit ? const Color(0xFF10B981) : const Color(0xFFEF4444),
-                              ),
-                            ),
-                          ],
-                        ),
-                      );
-                    },
-                  ),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.refresh_rounded, color: Colors.white),
+            onPressed: _loadData,
           ),
         ],
       ),
+      body: _isLoading
+          ? const Center(child: CircularProgressIndicator())
+          : RefreshIndicator(
+              onRefresh: _loadData,
+              child: Column(
+                children: [
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(24),
+                    decoration: const BoxDecoration(
+                      color: Color(0xFF0F5A47),
+                      borderRadius: BorderRadius.only(
+                        bottomLeft: Radius.circular(24),
+                        bottomRight: Radius.circular(24),
+                      ),
+                    ),
+                    child: Column(
+                      children: [
+                        const Text('Saldo Saat Ini', style: TextStyle(color: Colors.white70, fontSize: 14)),
+                        const SizedBox(height: 8),
+                        Text(
+                          'Rp ${_formatCurrency(_balance)}',
+                          style: const TextStyle(color: Colors.white, fontSize: 28, fontWeight: FontWeight.bold),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Expanded(
+                    child: _mutations.isEmpty
+                        ? const Center(child: Text('Belum ada riwayat mutasi saldo.'))
+                        : ListView.separated(
+                            padding: const EdgeInsets.all(20),
+                            itemCount: _mutations.length,
+                            separatorBuilder: (_, __) => const SizedBox(height: 12),
+                            itemBuilder: (context, i) {
+                              final item = _mutations[i];
+                              final isKredit = item['type'] == 'Kredit';
+                              return Container(
+                                padding: const EdgeInsets.all(16),
+                                decoration: BoxDecoration(
+                                  color: Colors.white,
+                                  borderRadius: BorderRadius.circular(16),
+                                  border: Border.all(color: const Color(0xFFE2E8F0)),
+                                ),
+                                child: Row(
+                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                  children: [
+                                    Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          item['desc'] as String,
+                                          style: const TextStyle(fontWeight: FontWeight.bold, color: AppColors.textDark),
+                                        ),
+                                        const SizedBox(height: 4),
+                                        Text(
+                                          _formatDate(item['date'] as DateTime),
+                                          style: const TextStyle(color: AppColors.textMuted, fontSize: 11),
+                                        ),
+                                      ],
+                                    ),
+                                    Text(
+                                      '${isKredit ? '+' : '-'} Rp ${_formatCurrency(item['amount'] as int)}',
+                                      style: TextStyle(
+                                        fontWeight: FontWeight.bold,
+                                        color: isKredit ? const Color(0xFF10B981) : const Color(0xFFEF4444),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              );
+                            },
+                          ),
+                  ),
+                ],
+              ),
+            ),
     );
   }
 }

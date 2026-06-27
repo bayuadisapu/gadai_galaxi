@@ -36,6 +36,9 @@ class _BranchDashboardPageState extends State<BranchDashboardPage> {
   Future<void> _loadData() async {
     setState(() => _isLoading = true);
     try {
+      // Auto-mark transaksi overdue → Macet
+      await _svc.markOverdueTransactions(branchId: widget.cabangId);
+
       final txs = await _svc.fetchTransactions(branchId: widget.cabangId);
       final customers = await _svc.fetchNasabah(branchId: widget.cabangId);
       final branchName = await _svc.getBranchName(widget.cabangId);

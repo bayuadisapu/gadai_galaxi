@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:galaxi_gadai/core/constants/app_colors.dart';
 import 'package:galaxi_gadai/core/data/mock_data.dart';
@@ -67,11 +68,15 @@ class _NasabahLoginPageState extends State<NasabahLoginPage> {
       setState(() => _isLoading = false);
 
       if (customer != null) {
+        // Log aktivitas login berhasil
+        unawaited(_svc.logNasabahLogin(customer.id, customer.name));
         Navigator.pushReplacement(
           context,
           MaterialPageRoute(builder: (context) => NasabahDashboardPage(customer: customer)),
         );
       } else {
+        // Log login gagal
+        unawaited(_svc.logNasabahLoginFailed(phone));
         setState(() => _errorMessage = 'Nomor HP atau kata sandi salah');
       }
     } catch (e) {

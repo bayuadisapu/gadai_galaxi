@@ -50,8 +50,11 @@ class _NasabahDashboardPageState extends State<NasabahDashboardPage> {
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Batal')),
           TextButton(
-            onPressed: () {
+            onPressed: () async {
               Navigator.pop(ctx);
+              // Log aktivitas logout
+              await _svc.logNasabahLogout(widget.customer.id, widget.customer.name);
+              if (!mounted) return;
               Navigator.pushAndRemoveUntil(context, MaterialPageRoute(builder: (context) => const RolePortalPage()), (route) => false);
             },
             child: const Text('Keluar', style: TextStyle(color: Colors.red)),

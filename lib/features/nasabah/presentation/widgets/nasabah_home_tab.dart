@@ -211,58 +211,7 @@ class NasabahHomeTab extends StatelessWidget {
                             ),
                           ],
                         ),
-                        if (isOverdue || isNearDue) ...[
-                          const SizedBox(height: 10),
-                          Row(
-                            children: [
-                              Expanded(
-                                child: SizedBox(
-                                  height: 40,
-                                  child: ElevatedButton.icon(
-                                    icon: const Icon(Icons.autorenew_rounded, size: 14, color: Colors.white),
-                                    label: Text(
-                                      isOverdue ? 'Perpanjang' : 'Perpanjang Tenor',
-                                      style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold),
-                                    ),
-                                    onPressed: () => Navigator.push(
-                                      context,
-                                      MaterialPageRoute(builder: (_) => NasabahPaymentPage(transaction: tx)),
-                                    ),
-                                    style: ElevatedButton.styleFrom(
-                                      backgroundColor: isOverdue ? const Color(0xFFEF4444) : const Color(0xFF003F88),
-                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                                      elevation: 0,
-                                      padding: const EdgeInsets.symmetric(horizontal: 8),
-                                    ),
-                                  ),
-                                ),
-                              ),
-                              const SizedBox(width: 8),
-                              Expanded(
-                                child: SizedBox(
-                                  height: 40,
-                                  child: ElevatedButton.icon(
-                                    icon: const Icon(Icons.redeem_rounded, size: 14, color: Colors.white),
-                                    label: const Text(
-                                      'Tebus Barang',
-                                      style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold),
-                                    ),
-                                    onPressed: () => Navigator.push(
-                                      context,
-                                      MaterialPageRoute(builder: (_) => NasabahPaymentPage(transaction: tx, isRedemption: true)),
-                                    ),
-                                    style: ElevatedButton.styleFrom(
-                                      backgroundColor: const Color(0xFF065F46),
-                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                                      elevation: 0,
-                                      padding: const EdgeInsets.symmetric(horizontal: 8),
-                                    ),
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ],
+
                         if (isOverdue) ...[
                           const SizedBox(height: 10),
                           Container(

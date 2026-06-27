@@ -1,3 +1,6 @@
+import 'dart:convert';
+import 'package:crypto/crypto.dart';
+import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:galaxi_gadai/core/data/mock_data.dart';
 
@@ -49,7 +52,7 @@ class SupabaseGadaiService {
           }
         } catch (e) {
           // Jika RLS memblokir/gagal query, gunakan fallback pola username@gadai.com
-          print('Gagal mengambil email dari username: $e');
+          debugPrint('Gagal mengambil email dari username: $e');
           email = '$email@gadai.com';
         }
       }
@@ -95,7 +98,7 @@ class SupabaseGadaiService {
         'cabang': '',
       };
     } catch (e) {
-      print('loginStaff error: $e');
+      debugPrint('loginStaff error: $e');
       return null;
     }
   }
@@ -136,7 +139,7 @@ class SupabaseGadaiService {
         'cabang': '',
       };
     } catch (e) {
-      print('getCurrentStaff error: $e');
+      debugPrint('getCurrentStaff error: $e');
       return null;
     }
   }
@@ -197,17 +200,107 @@ class SupabaseGadaiService {
     cabangId: row['branch_id'] as String? ?? '',
   );
 
+  /// Update data profil nasabah
+  Future<Customer> updateNasabah({
+    required String id,
+    required String name,
+    required String phone,
+    required String address,
+    String? birthPlace,
+    String? birthDate,
+    String? gender,
+    String? nik,
+  }) async {
+    final row = await _client.from('gadai_nasabah').update({
+      'name': name,
+      'phone': phone,
+      'address': address,
+      if (birthPlace != null) 'birth_place': birthPlace,
+      if (birthDate != null) 'birth_date': birthDate,
+      if (gender != null) 'gender': gender,
+      if (nik != null) 'nik': nik,
+    }).eq('id', id).select().single();
+    return _customerFromRow(row);
+  }
+
+  /// Ganti password nasabah (verifikasi password lama dulu)
+  Future<bool> changeNasabahPassword({
+    required String phone,
+    required String oldPassword,
+    required String newPassword,
+  }) async {
+    final oldHash = _hashPassword(oldPassword);
+    final newHash = _hashPassword(newPassword);
+
+    // Cek password lama (hash dulu, fallback plaintext)
+    var accounts = await _client
+        .from('gadai_nasabah_accounts')
+        .select('id')
+        .eq('phone', phone)
+        .eq('password', oldHash)
+        .limit(1);
+
+    if (accounts.isEmpty) {
+      // Fallback plaintext
+      accounts = await _client
+          .from('gadai_nasabah_accounts')
+          .select('id')
+          .eq('phone', phone)
+          .eq('password', oldPassword)
+          .limit(1);
+    }
+
+    if (accounts.isEmpty) return false;
+
+    await _client
+        .from('gadai_nasabah_accounts')
+        .update({'password': newHash})
+        .eq('phone', phone);
+
+    return true;
+  }
+
   // ═══════════════════════════════════
   // NASABAH AUTH
   // ═══════════════════════════════════
 
+  // ── Password Hashing ──
+  static String _hashPassword(String password) {
+    final bytes = utf8.encode(password);
+    final digest = sha256.convert(bytes);
+    return digest.toString();
+  }
+
   Future<Customer?> loginNasabah(String phone, String password) async {
-    final accounts = await _client
+    final hashedPassword = _hashPassword(password);
+
+    // Coba login dengan password yang sudah di-hash (akun baru)
+    var accounts = await _client
         .from('gadai_nasabah_accounts')
         .select()
         .eq('phone', phone)
-        .eq('password', password)
+        .eq('password', hashedPassword)
         .limit(1);
+
+    // Fallback: coba plaintext untuk akun lama (backward compat)
+    if (accounts.isEmpty) {
+      accounts = await _client
+          .from('gadai_nasabah_accounts')
+          .select()
+          .eq('phone', phone)
+          .eq('password', password)
+          .limit(1);
+
+      // Jika login plaintext berhasil, migrasi ke hashed
+      if (accounts.isNotEmpty) {
+        try {
+          await _client
+              .from('gadai_nasabah_accounts')
+              .update({'password': hashedPassword})
+              .eq('phone', phone);
+        } catch (_) {}
+      }
+    }
 
     if (accounts.isEmpty) return null;
 
@@ -216,11 +309,24 @@ class SupabaseGadaiService {
   }
 
   Future<void> registerNasabahAccount(String phone, String password, String nasabahId) async {
+    final hashedPassword = _hashPassword(password);
     await _client.from('gadai_nasabah_accounts').insert({
       'phone': phone,
-      'password': password,
+      'password': hashedPassword,
       'nasabah_id': nasabahId,
     });
+  }
+
+  /// Reset password nasabah oleh Admin (tanpa verifikasi password lama)
+  Future<void> adminResetNasabahPassword({
+    required String phone,
+    required String newPassword,
+  }) async {
+    final newHash = _hashPassword(newPassword);
+    await _client
+        .from('gadai_nasabah_accounts')
+        .update({'password': newHash})
+        .eq('phone', phone);
   }
 
   // ═══════════════════════════════════
@@ -426,6 +532,135 @@ class SupabaseGadaiService {
   Future<List<ExtensionHistory>> fetchExtensionHistory(String txId) => fetchExtensions(txId);
 
   // ═══════════════════════════════════
+  // TENANT WALLET (persisten ke Supabase)
+  // ═══════════════════════════════════
+
+  /// Ambil saldo wallet dari tabel gadai_wallet berdasarkan branchId
+  Future<int> fetchWalletBalance(String branchId) async {
+    try {
+      final data = await _client
+          .from('gadai_wallet')
+          .select('balance')
+          .eq('branch_id', branchId)
+          .limit(1);
+      if (data.isEmpty) return 0;
+      return (data.first['balance'] as num?)?.toInt() ?? 0;
+    } catch (_) {
+      return 0;
+    }
+  }
+
+  /// Top up saldo wallet cabang
+  Future<void> walletTopUp(String branchId, int amount, String description) async {
+    try {
+      // Upsert balance
+      await _client.rpc('gadai_wallet_topup', params: {
+        'p_branch_id': branchId,
+        'p_amount': amount,
+      });
+      // Insert mutasi
+      await _client.from('gadai_wallet_mutations').insert({
+        'branch_id': branchId,
+        'type': 'Kredit',
+        'amount': amount,
+        'description': description,
+      });
+    } catch (_) {}
+  }
+
+  /// Ambil riwayat mutasi wallet
+  Future<List<Map<String, dynamic>>> fetchWalletMutations(String branchId) async {
+    try {
+      final data = await _client
+          .from('gadai_wallet_mutations')
+          .select()
+          .eq('branch_id', branchId)
+          .order('created_at', ascending: false)
+          .limit(50);
+      return data.map<Map<String, dynamic>>((row) => {
+        'date': DateTime.parse(row['created_at'] as String),
+        'type': row['type'] as String,
+        'amount': (row['amount'] as num).toInt(),
+        'desc': row['description'] as String? ?? '',
+      }).toList();
+    } catch (_) {
+      return [];
+    }
+  }
+
+  // ═══════════════════════════════════
+  // SYSTEM CONFIG (persisten ke Supabase)
+  // ═══════════════════════════════════
+
+  /// Load konfigurasi sistem dari tabel gadai_config
+  Future<Map<String, dynamic>> fetchSystemConfig() async {
+    try {
+      final data = await _client.from('gadai_config').select();
+      final Map<String, dynamic> config = {};
+      for (final row in data) {
+        final key = row['key'] as String;
+        final value = row['value'];
+        config[key] = value;
+      }
+      return config;
+    } catch (_) {
+      return {};
+    }
+  }
+
+  /// Simpan satu parameter konfigurasi
+  Future<void> saveConfigParam(String key, String value) async {
+    try {
+      await _client.from('gadai_config').upsert({
+        'key': key,
+        'value': value,
+      }, onConflict: 'key');
+    } catch (_) {}
+  }
+
+  /// Simpan semua parameter konfigurasi sekaligus
+  Future<void> saveSystemConfig({
+    required int tariffPerUnit,
+    required int unitAmount,
+    required int minTenor,
+    required int maxTenor,
+    required int alertDays,
+  }) async {
+    try {
+      final configs = [
+        {'key': 'tariff_per_unit', 'value': tariffPerUnit.toString()},
+        {'key': 'unit_amount', 'value': unitAmount.toString()},
+        {'key': 'min_tenor', 'value': minTenor.toString()},
+        {'key': 'max_tenor', 'value': maxTenor.toString()},
+        {'key': 'alert_days', 'value': alertDays.toString()},
+      ];
+      for (final cfg in configs) {
+        await _client.from('gadai_config').upsert(cfg, onConflict: 'key');
+      }
+    } catch (_) {}
+  }
+
+  // ═══════════════════════════════════
+  // AUTO MARK OVERDUE TRANSACTIONS
+  // ═══════════════════════════════════
+
+  /// Update transaksi Aktif yang sudah lewat jatuh tempo menjadi Macet
+  Future<void> markOverdueTransactions({String? branchId}) async {
+    try {
+      final now = DateTime.now().toIso8601String();
+      var query = _client
+          .from('gadai_transactions')
+          .update({'status': 'Macet'})
+          .lt('date_due', now)
+          .eq('status', 'Aktif');
+      if (branchId != null) {
+        query = query.eq('branch_id', branchId);
+      }
+      await query;
+    } catch (_) {}
+  }
+
+  // ═══════════════════════════════════
   // UPDATE TRANSACTION DETAILS
   // ═══════════════════════════════════
 
@@ -458,5 +693,175 @@ class SupabaseGadaiService {
 
   Future<void> signOut() async {
     await _client.auth.signOut();
+  }
+
+  // ═══════════════════════════════════════════════════════
+  // ACTIVITY LOG
+  // ═══════════════════════════════════════════════════════
+
+  /// Tulis satu entri log ke Supabase. Fire-and-forget — error diabaikan agar
+  /// tidak mengganggu alur utama.
+  Future<bool> logActivity({
+    required String userId,
+    required String role,
+    required String action,
+    String? description,
+    Map<String, dynamic>? metadata,
+  }) async {
+    try {
+      await _client.from('gadai_activity_logs').insert({
+        'user_id': userId,
+        'role': role,
+        'action': action,
+        'description': description,
+        if (metadata != null) 'metadata': metadata,
+      });
+      return true;
+    } catch (e) {
+      // Tampilkan error agar bisa didiagnosis lewat flutter run console
+      debugPrint('[ActivityLog ERROR] action=$action userId=$userId → $e');
+      return false;
+    }
+  }
+
+  // ── Convenience wrappers ─────────────────────────────────
+
+  Future<bool> logNasabahLogin(String nasabahId, String name) => logActivity(
+        userId: nasabahId,
+        role: 'nasabah',
+        action: 'LOGIN_SUCCESS',
+        description: 'Nasabah "$name" berhasil login.',
+      );
+
+  Future<bool> logNasabahLoginFailed(String phone) => logActivity(
+        userId: phone,
+        role: 'nasabah',
+        action: 'LOGIN_FAILED',
+        description: 'Percobaan login gagal untuk nomor HP: $phone.',
+      );
+
+  Future<bool> logNasabahLogout(String nasabahId, String name) => logActivity(
+        userId: nasabahId,
+        role: 'nasabah',
+        action: 'LOGOUT',
+        description: 'Nasabah "$name" logout.',
+      );
+
+  Future<bool> logNasabahRegister(String nasabahId, String name, String phone) =>
+      logActivity(
+        userId: nasabahId,
+        role: 'nasabah',
+        action: 'REGISTER',
+        description: 'Akun nasabah baru dibuat: "$name" (HP: $phone).',
+      );
+
+  Future<bool> logNasabahPasswordChange(String nasabahId, String name) =>
+      logActivity(
+        userId: nasabahId,
+        role: 'nasabah',
+        action: 'CHANGE_PASSWORD',
+        description: 'Nasabah "$name" mengganti password.',
+      );
+
+  Future<bool> logNasabahProfileUpdate(
+          String nasabahId, String name, List<String> changedFields) =>
+      logActivity(
+        userId: nasabahId,
+        role: 'nasabah',
+        action: 'UPDATE_PROFILE',
+        description: 'Nasabah "$name" memperbarui profil: ${changedFields.join(", ")}.',
+        metadata: {'changed_fields': changedFields},
+      );
+
+  Future<bool> logAdminCreateNasabah(
+          String adminId, String nasabahName, String phone) =>
+      logActivity(
+        userId: adminId,
+        role: 'admin',
+        action: 'ADMIN_CREATE_NASABAH',
+        description: 'Admin membuat akun nasabah baru: "$nasabahName" (HP: $phone).',
+        metadata: {'nasabah_name': nasabahName, 'phone': phone},
+      );
+
+  Future<bool> logAdminUpdateNasabah(
+          String adminId, String nasabahName, String phone) =>
+      logActivity(
+        userId: adminId,
+        role: 'admin',
+        action: 'ADMIN_UPDATE_NASABAH',
+        description: 'Admin memperbarui profil nasabah: "$nasabahName" (HP: $phone).',
+        metadata: {'nasabah_name': nasabahName, 'phone': phone},
+      );
+
+  Future<bool> logAdminResetPassword(String adminId, String nasabahPhone) =>
+      logActivity(
+        userId: adminId,
+        role: 'admin',
+        action: 'ADMIN_RESET_PASSWORD',
+        description: 'Admin mereset password nasabah HP: $nasabahPhone.',
+        metadata: {'target_phone': nasabahPhone},
+      );
+
+  Future<bool> logTransaksiCreated(
+          String userId, String txId, String namaJaminan, int principal) =>
+      logActivity(
+        userId: userId,
+        role: 'nasabah',
+        action: 'TRANSAKSI_CREATED',
+        description:
+            'Gadai baru dibuat: TX-$txId, jaminan "$namaJaminan", pokok Rp $principal.',
+        metadata: {'tx_id': txId, 'principal': principal},
+      );
+
+  Future<bool> logExtensionRequested(String nasabahId, String txId) =>
+      logActivity(
+        userId: nasabahId,
+        role: 'nasabah',
+        action: 'EXTENSION_REQUESTED',
+        description: 'Nasabah mengajukan perpanjangan untuk transaksi TX-$txId.',
+        metadata: {'tx_id': txId},
+      );
+
+  Future<bool> logNasabahRedeemed(String nasabahId, String txId, String brandModel, int totalPay) =>
+      logActivity(
+        userId: nasabahId,
+        role: 'nasabah',
+        action: 'TRANSAKSI_REDEEMED',
+        description: 'Nasabah menebus jaminan "$brandModel" sebesar Rp $totalPay (Lunas).',
+        metadata: {'tx_id': txId, 'amount': totalPay},
+      );
+
+  // ── Fetch log entries ────────────────────────────────────
+
+  /// Ambil semua log aktivitas, terbaru dulu
+  Future<List<Map<String, dynamic>>> fetchActivityLogs({int limit = 200}) async {
+    try {
+      final data = await _client
+          .from('gadai_activity_logs')
+          .select()
+          .order('created_at', ascending: false)
+          .limit(limit);
+      debugPrint('[ActivityLog] Fetched ${data.length} log entries');
+      return List<Map<String, dynamic>>.from(data);
+    } catch (e) {
+      debugPrint('[ActivityLog FETCH ERROR] $e');
+      return [];
+    }
+  }
+
+  /// Ambil log aktivitas untuk user tertentu (nasabahId)
+  Future<List<Map<String, dynamic>>> fetchActivityLogsByUser(
+      String userId, {int limit = 100}) async {
+    try {
+      final data = await _client
+          .from('gadai_activity_logs')
+          .select()
+          .eq('user_id', userId)
+          .order('created_at', ascending: false)
+          .limit(limit);
+      return List<Map<String, dynamic>>.from(data);
+    } catch (_) {
+      return [];
+    }
   }
 }

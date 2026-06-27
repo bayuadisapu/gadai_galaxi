@@ -276,56 +276,7 @@ class _NasabahTransaksiDetailPageState extends State<NasabahTransaksiDetailPage>
           ],
         ),
       ),
-      // CTA Perpanjang & Tebus
-      bottomNavigationBar: tx.status != 'Lunas'
-          ? Container(
-              color: Colors.white,
-              padding: const EdgeInsets.fromLTRB(20, 12, 20, 28),
-              child: Row(
-                children: [
-                  // Perpanjang Tenor
-                  Expanded(
-                    child: SizedBox(
-                      height: 52,
-                      child: ElevatedButton.icon(
-                        icon: const Icon(Icons.autorenew_rounded, color: Colors.white, size: 18),
-                        label: const Text('Perpanjang', style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold)),
-                        onPressed: () => Navigator.push(
-                          context,
-                          MaterialPageRoute(builder: (_) => NasabahPaymentPage(transaction: tx)),
-                        ),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFF003F88),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                          elevation: 0,
-                        ),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  // Tebus Barang (Lunas)
-                  Expanded(
-                    child: SizedBox(
-                      height: 52,
-                      child: ElevatedButton.icon(
-                        icon: const Icon(Icons.redeem_rounded, color: Colors.white, size: 18),
-                        label: const Text('Tebus Barang', style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold)),
-                        onPressed: () => Navigator.push(
-                          context,
-                          MaterialPageRoute(builder: (_) => NasabahPaymentPage(transaction: tx, isRedemption: true)),
-                        ),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFF065F46),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                          elevation: 0,
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            )
-          : null,
+      bottomNavigationBar: null,
     );
   }
 

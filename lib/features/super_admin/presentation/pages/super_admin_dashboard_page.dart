@@ -1,3 +1,5 @@
+import 'dart:async';
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:galaxi_gadai/core/constants/app_colors.dart';
 import 'package:galaxi_gadai/core/data/mock_data.dart';
@@ -21,8 +23,12 @@ class _SuperAdminDashboardPageState extends State<SuperAdminDashboardPage> {
   List<Cabang> _branches = [];
   List<PawnTransaction> _allTx = [];
   List<Customer> _allCustomers = [];
+  List<Customer> _allNasabah = [];
   List<Map<String, String>> _staffUsers = [];
+  List<Map<String, dynamic>> _activityLogs = [];
   bool _isLoading = true;
+  Timer? _logTimer;
+  String? _lastLogId;
 
   late TextEditingController _tariffCtrl;
   late TextEditingController _unitAmountCtrl;
@@ -38,11 +44,17 @@ class _SuperAdminDashboardPageState extends State<SuperAdminDashboardPage> {
     _minTenorCtrl = TextEditingController(text: SystemConfig.minTenor.toString());
     _maxTenorCtrl = TextEditingController(text: SystemConfig.maxTenor.toString());
     _alertDaysCtrl = TextEditingController(text: SystemConfig.alertDays.toString());
-    _loadData();
+    _loadData().then((_) {
+      if (_activityLogs.isNotEmpty) {
+        _lastLogId = _activityLogs.first['id'] as String?;
+      }
+      _startLogPolling();
+    });
   }
 
   @override
   void dispose() {
+    _logTimer?.cancel();
     _tariffCtrl.dispose();
     _unitAmountCtrl.dispose();
     _minTenorCtrl.dispose();
@@ -51,19 +63,385 @@ class _SuperAdminDashboardPageState extends State<SuperAdminDashboardPage> {
     super.dispose();
   }
 
+  void _startLogPolling() {
+    _logTimer?.cancel();
+    _logTimer = Timer.periodic(const Duration(seconds: 5), (timer) async {
+      try {
+        final latest = await _svc.fetchActivityLogs(limit: 1);
+        if (latest.isNotEmpty) {
+          final newest = latest.first;
+          final newestId = newest['id'] as String?;
+          if (_lastLogId != null && newestId != _lastLogId) {
+            _lastLogId = newestId;
+            if (mounted) {
+              _showNewLogNotification(newest);
+              _refreshLogsOnly();
+            }
+          } else if (_lastLogId == null) {
+            _lastLogId = newestId;
+          }
+        }
+      } catch (_) {}
+    });
+  }
+
+  Future<void> _refreshLogsOnly() async {
+    try {
+      final logs = await _svc.fetchActivityLogs(limit: 300);
+      if (mounted) {
+        setState(() {
+          _activityLogs = logs;
+        });
+      }
+    } catch (_) {}
+  }
+
+  void _showNewLogNotification(Map<String, dynamic> log) {
+    final action = log['action'] as String? ?? '-';
+    final description = log['description'] as String? ?? '';
+    final color = _actionColor(action);
+    final icon = _actionIcon(action);
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Row(
+          children: [
+            Icon(icon, color: color, size: 20),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Aktivitas Baru: $action',
+                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    description,
+                    style: const TextStyle(fontSize: 11),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+        action: SnackBarAction(
+          label: 'LIHAT',
+          textColor: color,
+          onPressed: () => _showLogDetailDialog(context, log),
+        ),
+        behavior: SnackBarBehavior.floating,
+        duration: const Duration(seconds: 4),
+        backgroundColor: const Color(0xFF1E293B),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+      ),
+    );
+  }
+
+  // Mapping action → warna & icon
+  Color _actionColor(String action) {
+    switch (action) {
+      case 'LOGIN_SUCCESS': return const Color(0xFF10B981);
+      case 'LOGIN_FAILED': return const Color(0xFFEF4444);
+      case 'LOGOUT': return const Color(0xFF64748B);
+      case 'REGISTER': return const Color(0xFF3B82F6);
+      case 'CHANGE_PASSWORD':
+      case 'ADMIN_RESET_PASSWORD': return const Color(0xFFF59E0B);
+      case 'UPDATE_PROFILE': return const Color(0xFF8B5CF6);
+      case 'ADMIN_CREATE_NASABAH': return const Color(0xFF0F5A47);
+      case 'ADMIN_UPDATE_NASABAH': return const Color(0xFF6366F1);
+      case 'TRANSAKSI_CREATED': return const Color(0xFF1D4ED8);
+      case 'EXTENSION_REQUESTED': return const Color(0xFFDB2777);
+      case 'TRANSAKSI_REDEEMED': return const Color(0xFF047857);
+      default: return const Color(0xFF94A3B8);
+    }
+  }
+
+  IconData _actionIcon(String action) {
+    switch (action) {
+      case 'LOGIN_SUCCESS': return Icons.login_rounded;
+      case 'LOGIN_FAILED': return Icons.block_rounded;
+      case 'LOGOUT': return Icons.logout_rounded;
+      case 'REGISTER': return Icons.person_add_rounded;
+      case 'CHANGE_PASSWORD':
+      case 'ADMIN_RESET_PASSWORD': return Icons.lock_reset_rounded;
+      case 'UPDATE_PROFILE': return Icons.edit_rounded;
+      case 'ADMIN_CREATE_NASABAH': return Icons.person_add_alt_1_rounded;
+      case 'ADMIN_UPDATE_NASABAH': return Icons.manage_accounts_rounded;
+      case 'TRANSAKSI_CREATED': return Icons.receipt_long_rounded;
+      case 'EXTENSION_REQUESTED': return Icons.autorenew_rounded;
+      case 'TRANSAKSI_REDEEMED': return Icons.redeem_rounded;
+      default: return Icons.info_outline_rounded;
+    }
+  }
+
+  String _formatLogTime(String? isoString) {
+    if (isoString == null) return '-';
+    try {
+      final dt = DateTime.parse(isoString).toLocal();
+      final months = ['Jan','Feb','Mar','Apr','Mei','Jun','Jul','Agt','Sep','Okt','Nov','Des'];
+      return '${dt.day.toString().padLeft(2,'0')} ${months[dt.month-1]} ${dt.year}  ${dt.hour.toString().padLeft(2,'0')}:${dt.minute.toString().padLeft(2,'0')}';
+    } catch (_) {
+      return isoString;
+    }
+  }
+
+  Color _roleColor(String role) {
+    switch (role) {
+      case 'nasabah': return const Color(0xFF0F5A47);
+      case 'admin': return const Color(0xFFEF4444);
+      case 'super_admin': return const Color(0xFF7F1D1D);
+      default: return const Color(0xFF64748B);
+    }
+  }
+
+  String _getPriority(String action) {
+    switch (action) {
+      case 'TRANSAKSI_CREATED':
+      case 'TRANSAKSI_REDEEMED':
+      case 'EXTENSION_REQUESTED':
+      case 'LOGIN_FAILED':
+      case 'CHANGE_PASSWORD':
+      case 'ADMIN_RESET_PASSWORD':
+        return 'TINGGI';
+      case 'UPDATE_PROFILE':
+      case 'ADMIN_UPDATE_NASABAH':
+      case 'ADMIN_CREATE_NASABAH':
+      case 'REGISTER':
+        return 'SEDANG';
+      default:
+        return 'RENDAH';
+    }
+  }
+
+  Color _priorityColor(String priority) {
+    switch (priority) {
+      case 'TINGGI': return const Color(0xFFEF4444);
+      case 'SEDANG': return const Color(0xFFF59E0B);
+      default: return const Color(0xFF10B981);
+    }
+  }
+
+  void _showLogDetailDialog(BuildContext context, Map<String, dynamic> log) {
+    final action = log['action'] as String? ?? '-';
+    final role = log['role'] as String? ?? 'nasabah';
+    final description = log['description'] as String? ?? '';
+    final createdAt = log['created_at'] as String?;
+    final userId = log['user_id'] as String? ?? '-';
+    final ipAddress = log['ip_address'] as String? ?? '-';
+    final metadata = log['metadata'];
+    final color = _actionColor(action);
+    final icon = _actionIcon(action);
+    final prio = _getPriority(action);
+    final prioCol = _priorityColor(prio);
+
+    String formattedMetadata = '';
+    if (metadata != null) {
+      try {
+        formattedMetadata = const JsonEncoder.withIndent('  ').convert(metadata);
+      } catch (_) {
+        formattedMetadata = metadata.toString();
+      }
+    }
+
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        contentPadding: EdgeInsets.zero,
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
+              decoration: BoxDecoration(
+                color: color.withValues(alpha: 0.1),
+                borderRadius: const BorderRadius.only(
+                  topLeft: Radius.circular(16),
+                  topRight: Radius.circular(16),
+                ),
+              ),
+              child: Row(
+                children: [
+                  Container(
+                    width: 40, height: 40,
+                    decoration: BoxDecoration(
+                      color: color.withValues(alpha: 0.15),
+                      shape: BoxShape.circle,
+                    ),
+                    child: Icon(icon, color: color, size: 20),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          action,
+                          style: TextStyle(color: color, fontWeight: FontWeight.bold, fontSize: 16),
+                        ),
+                        const SizedBox(height: 4),
+                        Row(
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1.5),
+                              decoration: BoxDecoration(
+                                color: _roleColor(role).withValues(alpha: 0.08),
+                                borderRadius: BorderRadius.circular(4),
+                              ),
+                              child: Text(
+                                role.toUpperCase(),
+                                style: TextStyle(color: _roleColor(role), fontSize: 8, fontWeight: FontWeight.bold),
+                              ),
+                            ),
+                            const SizedBox(width: 6),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1.5),
+                              decoration: BoxDecoration(
+                                color: prioCol.withValues(alpha: 0.08),
+                                borderRadius: BorderRadius.circular(4),
+                                border: Border.all(color: prioCol.withValues(alpha: 0.2)),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Container(
+                                    width: 4, height: 4,
+                                    decoration: BoxDecoration(color: prioCol, shape: BoxShape.circle),
+                                  ),
+                                  const SizedBox(width: 4),
+                                  Text(
+                                    'PRIORITAS $prio',
+                                    style: TextStyle(color: prioCol, fontSize: 8, fontWeight: FontWeight.bold),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 20, 20, 10),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text('KETERANGAN', style: TextStyle(color: AppColors.textMuted, fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 0.5)),
+                  const SizedBox(height: 4),
+                  Text(description, style: const TextStyle(color: AppColors.textDark, fontSize: 13, height: 1.4)),
+                  const SizedBox(height: 16),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text('USER ID / ACTOR', style: TextStyle(color: AppColors.textMuted, fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 0.5)),
+                            const SizedBox(height: 4),
+                            Text(userId, style: const TextStyle(color: AppColors.textDark, fontSize: 12, fontWeight: FontWeight.w600)),
+                          ],
+                        ),
+                      ),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text('IP ADDRESS', style: TextStyle(color: AppColors.textMuted, fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 0.5)),
+                            const SizedBox(height: 4),
+                            Text(ipAddress, style: const TextStyle(color: AppColors.textDark, fontSize: 12, fontWeight: FontWeight.w600)),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+                  const Text('WAKTU AKTIVITAS', style: TextStyle(color: AppColors.textMuted, fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 0.5)),
+                  const SizedBox(height: 4),
+                  Text(_formatLogTime(createdAt), style: const TextStyle(color: AppColors.textDark, fontSize: 12)),
+                  if (formattedMetadata.isNotEmpty && formattedMetadata != '{}') ...[
+                    const SizedBox(height: 16),
+                    const Text('METADATA (JSON)', style: TextStyle(color: AppColors.textMuted, fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 0.5)),
+                    const SizedBox(height: 6),
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF1E293B),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: SingleChildScrollView(
+                        scrollDirection: Axis.horizontal,
+                        child: Text(
+                          formattedMetadata,
+                          style: const TextStyle(
+                            color: Color(0xFF38BDF8),
+                            fontFamily: 'Courier',
+                            fontSize: 11,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Tutup', style: TextStyle(fontWeight: FontWeight.bold, color: AppColors.primary)),
+          ),
+        ],
+      ),
+    );
+  }
+
   Future<void> _loadData() async {
     setState(() => _isLoading = true);
     try {
       final branches = await _svc.fetchBranches();
       final allTx = await _svc.fetchTransactions();
       final allCustomers = await _svc.fetchNasabah();
+      final allNasabah = await _svc.fetchNasabah();
       final staffUsers = await _svc.fetchStaffUsers();
+      final activityLogs = await _svc.fetchActivityLogs(limit: 300);
+
+      // Load config dari Supabase dan update SystemConfig
+      final config = await _svc.fetchSystemConfig();
+      if (config.isNotEmpty) {
+        SystemConfig.tariffPerUnit = int.tryParse(config['tariff_per_unit']?.toString() ?? '') ?? SystemConfig.tariffPerUnit;
+        SystemConfig.unitAmount = int.tryParse(config['unit_amount']?.toString() ?? '') ?? SystemConfig.unitAmount;
+        SystemConfig.minTenor = int.tryParse(config['min_tenor']?.toString() ?? '') ?? SystemConfig.minTenor;
+        SystemConfig.maxTenor = int.tryParse(config['max_tenor']?.toString() ?? '') ?? SystemConfig.maxTenor;
+        SystemConfig.alertDays = int.tryParse(config['alert_days']?.toString() ?? '') ?? SystemConfig.alertDays;
+      }
+
+      // Auto-mark transaksi overdue
+      await _svc.markOverdueTransactions();
+
       if (!mounted) return;
       setState(() {
         _branches = branches;
         _allTx = allTx;
         _allCustomers = allCustomers;
+        _allNasabah = allNasabah;
         _staffUsers = staffUsers;
+        _activityLogs = activityLogs;
+        // Sync controllers dengan nilai terbaru dari Supabase
+        _tariffCtrl.text = SystemConfig.tariffPerUnit.toString();
+        _unitAmountCtrl.text = SystemConfig.unitAmount.toString();
+        _minTenorCtrl.text = SystemConfig.minTenor.toString();
+        _maxTenorCtrl.text = SystemConfig.maxTenor.toString();
+        _alertDaysCtrl.text = SystemConfig.alertDays.toString();
         _isLoading = false;
       });
     } catch (e) {
@@ -319,6 +697,265 @@ class _SuperAdminDashboardPageState extends State<SuperAdminDashboardPage> {
     );
   }
 
+  // ── NASABAH CRUD DIALOGS ──
+  void _showNasabahDialog({Customer? nasabah}) {
+    final isEdit = nasabah != null;
+    final nameCtrl = TextEditingController(text: isEdit ? nasabah.name : '');
+    final phoneCtrl = TextEditingController(text: isEdit ? nasabah.phone : '');
+    final nikCtrl = TextEditingController(text: isEdit ? nasabah.nik : '');
+    final addressCtrl = TextEditingController(text: isEdit && nasabah.address != '-' ? nasabah.address : '');
+    final passwordCtrl = TextEditingController();
+    String selectedBranch = _branches.isNotEmpty ? _branches.first.id : '';
+    String selectedGender = isEdit && nasabah.gender.isNotEmpty && nasabah.gender != '-' ? nasabah.gender : 'Laki-laki';
+    final formKey = GlobalKey<FormState>();
+    bool saving = false;
+
+    showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          title: Text(isEdit ? 'Edit Data Nasabah' : 'Buat Akun Nasabah Baru'),
+          content: SingleChildScrollView(
+            child: Form(
+              key: formKey,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  _dialogTextField(nameCtrl, 'Nama Lengkap', Icons.badge_outlined,
+                      validator: (v) => v == null || v.trim().isEmpty ? 'Nama wajib diisi' : null),
+                  const SizedBox(height: 10),
+                  _dialogTextField(phoneCtrl, 'Nomor HP (untuk login)', Icons.phone_outlined,
+                      keyboardType: TextInputType.phone,
+                      validator: (v) {
+                        if (v == null || v.trim().isEmpty) return 'HP wajib diisi';
+                        if (!RegExp(r'^08[0-9]{8,11}$').hasMatch(v.trim())) return 'Format HP tidak valid';
+                        return null;
+                      }),
+                  const SizedBox(height: 10),
+                  _dialogTextField(nikCtrl, 'NIK (16 digit)', Icons.credit_card_outlined,
+                      keyboardType: TextInputType.number,
+                      validator: (v) {
+                        if (v == null || v.trim().isEmpty) return 'NIK wajib diisi';
+                        if (v.trim().length != 16) return 'NIK harus 16 digit';
+                        return null;
+                      }),
+                  const SizedBox(height: 10),
+                  _dialogTextField(addressCtrl, 'Alamat', Icons.home_outlined, maxLines: 2),
+                  const SizedBox(height: 10),
+                  DropdownButtonFormField<String>(
+                    initialValue: selectedGender,
+                    decoration: const InputDecoration(labelText: 'Jenis Kelamin', border: OutlineInputBorder(), isDense: true),
+                    items: const [
+                      DropdownMenuItem(value: 'Laki-laki', child: Text('Laki-laki')),
+                      DropdownMenuItem(value: 'Perempuan', child: Text('Perempuan')),
+                    ],
+                    onChanged: (val) => setDialogState(() => selectedGender = val ?? selectedGender),
+                  ),
+                  const SizedBox(height: 10),
+                  DropdownButtonFormField<String>(
+                    initialValue: selectedBranch.isEmpty ? null : selectedBranch,
+                    decoration: const InputDecoration(labelText: 'Cabang', border: OutlineInputBorder(), isDense: true),
+                    items: _branches.map((b) => DropdownMenuItem(value: b.id, child: Text(b.nama))).toList(),
+                    onChanged: (val) => setDialogState(() => selectedBranch = val ?? selectedBranch),
+                  ),
+                  if (!isEdit) ...[
+                    const SizedBox(height: 10),
+                    _dialogTextField(passwordCtrl, 'Password Awal', Icons.lock_outline_rounded,
+                        obscureText: true,
+                        validator: (v) {
+                          if (v == null || v.isEmpty) return 'Password wajib diisi';
+                          if (v.length < 6) return 'Minimal 6 karakter';
+                          return null;
+                        }),
+                    const SizedBox(height: 6),
+                    const Row(
+                      children: [
+                        Icon(Icons.info_outline, size: 14, color: Color(0xFF0F5A47)),
+                        SizedBox(width: 6),
+                        Expanded(
+                          child: Text(
+                            'Password ini akan diberikan ke nasabah untuk login pertama kali.',
+                            style: TextStyle(fontSize: 11, color: Color(0xFF0F5A47)),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Batal')),
+            ElevatedButton(
+              onPressed: saving ? null : () async {
+                if (!formKey.currentState!.validate()) return;
+                setDialogState(() => saving = true);
+
+                final navigator = Navigator.of(ctx);
+                final messenger = ScaffoldMessenger.of(context);
+
+                try {
+                  if (isEdit) {
+                    await _svc.updateNasabah(
+                      id: nasabah.id,
+                      name: nameCtrl.text.trim(),
+                      phone: phoneCtrl.text.trim(),
+                      address: addressCtrl.text.trim().isEmpty ? '-' : addressCtrl.text.trim(),
+                      gender: selectedGender,
+                      nik: nikCtrl.text.trim(),
+                    );
+                    // Log aktivitas
+                    unawaited(_svc.logAdminUpdateNasabah(
+                      'super_admin',
+                      nameCtrl.text.trim(),
+                      phoneCtrl.text.trim(),
+                    ));
+                    navigator.pop();
+                    _loadData();
+                    messenger.showSnackBar(
+                      const SnackBar(content: Text('Data nasabah berhasil diperbarui'), backgroundColor: Colors.green),
+                    );
+                  } else {
+                    // Buat profil nasabah
+                    final newNasabah = Customer(
+                      id: '',
+                      name: nameCtrl.text.trim(),
+                      nik: nikCtrl.text.trim(),
+                      phone: phoneCtrl.text.trim(),
+                      address: addressCtrl.text.trim().isEmpty ? '-' : addressCtrl.text.trim(),
+                      gender: selectedGender,
+                      birthPlace: '-',
+                      birthDate: '-',
+                      cabangId: selectedBranch,
+                    );
+                    final created = await _svc.createNasabah(newNasabah);
+                    // Buat akun login
+                    await _svc.registerNasabahAccount(
+                      phoneCtrl.text.trim(),
+                      passwordCtrl.text,
+                      created.id,
+                    );
+                    // Log aktivitas
+                    unawaited(_svc.logAdminCreateNasabah(
+                      'super_admin',
+                      nameCtrl.text.trim(),
+                      phoneCtrl.text.trim(),
+                    ));
+                    navigator.pop();
+                    _loadData();
+                    messenger.showSnackBar(
+                      SnackBar(
+                        content: Text('Akun nasabah ${nameCtrl.text.trim()} berhasil dibuat!'),
+                        backgroundColor: const Color(0xFF10B981),
+                      ),
+                    );
+                  }
+                } catch (e) {
+                  setDialogState(() => saving = false);
+                  messenger.showSnackBar(
+                    SnackBar(content: Text('Gagal: ${e.toString().contains('unique') ? 'Nomor HP sudah terdaftar' : e.toString()}'), backgroundColor: Colors.red),
+                  );
+                }
+              },
+              style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF0F5A47)),
+              child: saving
+                  ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                  : Text(isEdit ? 'Simpan' : 'Buat Akun', style: const TextStyle(color: Colors.white)),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _resetNasabahPassword(Customer nasabah) {
+    final passwordCtrl = TextEditingController();
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Text('Reset Password Nasabah'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Nasabah: ${nasabah.name}', style: const TextStyle(fontWeight: FontWeight.w600)),
+            Text('HP: ${nasabah.phone}', style: const TextStyle(color: Colors.grey, fontSize: 12)),
+            const SizedBox(height: 16),
+            TextField(
+              controller: passwordCtrl,
+              decoration: const InputDecoration(
+                labelText: 'Password Baru',
+                border: OutlineInputBorder(),
+                prefixIcon: Icon(Icons.lock_outline_rounded),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Batal')),
+          ElevatedButton(
+            onPressed: () async {
+              if (passwordCtrl.text.length < 6) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Password minimal 6 karakter'), backgroundColor: Colors.red),
+                );
+                return;
+              }
+              final navigator = Navigator.of(ctx);
+              final messenger = ScaffoldMessenger.of(context);
+              try {
+                // Force reset: update password dengan hash baru
+                await _svc.adminResetNasabahPassword(
+                  phone: nasabah.phone,
+                  newPassword: passwordCtrl.text,
+                );
+                // Log aktivitas
+                unawaited(_svc.logAdminResetPassword('super_admin', nasabah.phone));
+                navigator.pop();
+                messenger.showSnackBar(
+                  const SnackBar(content: Text('Password berhasil direset!'), backgroundColor: Colors.green),
+                );
+              } catch (e) {
+                messenger.showSnackBar(
+                  SnackBar(content: Text('Gagal reset: $e'), backgroundColor: Colors.red),
+                );
+              }
+            },
+            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFEF4444)),
+            child: const Text('Reset Password', style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _dialogTextField(
+    TextEditingController ctrl,
+    String label,
+    IconData icon, {
+    TextInputType keyboardType = TextInputType.text,
+    bool obscureText = false,
+    int maxLines = 1,
+    String? Function(String?)? validator,
+  }) {
+    return TextFormField(
+      controller: ctrl,
+      keyboardType: keyboardType,
+      obscureText: obscureText,
+      maxLines: maxLines,
+      decoration: InputDecoration(
+        labelText: label,
+        prefixIcon: Icon(icon, size: 20),
+        border: const OutlineInputBorder(),
+        isDense: true,
+      ),
+      validator: validator,
+    );
+  }
+
   void _deactivateUser(String id) {
     showDialog(
       context: context,
@@ -354,8 +991,8 @@ class _SuperAdminDashboardPageState extends State<SuperAdminDashboardPage> {
   @override
   Widget build(BuildContext context) {
     final statusBarHeight = MediaQuery.of(context).padding.top;
-    final tabs = ['Overview', 'Cabang', 'Admin Cabang', 'Konfigurasi'];
-    final icons = [Icons.dashboard_rounded, Icons.store_mall_directory_outlined, Icons.manage_accounts_rounded, Icons.settings_outlined];
+    final tabs = ['Overview', 'Cabang', 'Admin', 'Nasabah', 'Config', 'Log'];
+    final icons = [Icons.dashboard_rounded, Icons.store_mall_directory_outlined, Icons.manage_accounts_rounded, Icons.people_rounded, Icons.settings_outlined, Icons.history_rounded];
 
     Widget body;
     if (_isLoading) {
@@ -365,7 +1002,9 @@ class _SuperAdminDashboardPageState extends State<SuperAdminDashboardPage> {
         case 0: body = _buildOverview(); break;
         case 1: body = _selectedCabangId != null ? _buildCabangDetail(_selectedCabangId!) : _buildCabangList(); break;
         case 2: body = _buildUserList(); break;
-        case 3: body = _buildKonfigurasi(); break;
+        case 3: body = _buildNasabahList(); break;
+        case 4: body = _buildKonfigurasi(); break;
+        case 5: body = _buildActivityLog(); break;
         default: body = _buildOverview();
       }
     }
@@ -703,6 +1342,273 @@ class _SuperAdminDashboardPageState extends State<SuperAdminDashboardPage> {
     );
   }
 
+  Widget _buildNasabahList() {
+    return Scaffold(
+      backgroundColor: Colors.transparent,
+      body: RefreshIndicator(
+        onRefresh: _loadData,
+        child: _allNasabah.isEmpty
+            ? const Center(child: Text('Belum ada data nasabah.'))
+            : ListView.separated(
+                padding: const EdgeInsets.all(16),
+                physics: const AlwaysScrollableScrollPhysics(),
+                itemCount: _allNasabah.length,
+                separatorBuilder: (_, __) => const SizedBox(height: 10),
+                itemBuilder: (context, i) {
+                  final n = _allNasabah[i];
+                  final cabang = _branches.firstWhere(
+                    (b) => b.id == n.cabangId,
+                    orElse: () => Cabang(id: '', nama: n.cabangId, kode: '', admin: ''),
+                  );
+                  return Container(
+                    padding: const EdgeInsets.all(14),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(color: const Color(0xFFE2E8F0)),
+                    ),
+                    child: Row(
+                      children: [
+                        Container(
+                          width: 44, height: 44,
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFE6F4EA),
+                            shape: BoxShape.circle,
+                          ),
+                          child: Center(
+                            child: Text(
+                              n.name.isNotEmpty ? n.name[0].toUpperCase() : 'N',
+                              style: const TextStyle(color: Color(0xFF137333), fontSize: 18, fontWeight: FontWeight.bold),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(n.name, style: const TextStyle(color: AppColors.textDark, fontSize: 14, fontWeight: FontWeight.bold)),
+                              Text('📞 ${n.phone}', style: const TextStyle(color: AppColors.textMuted, fontSize: 12)),
+                              Text('🏢 ${cabang.nama.isNotEmpty ? cabang.nama : n.cabangId}',
+                                  style: const TextStyle(color: AppColors.textMuted, fontSize: 11)),
+                            ],
+                          ),
+                        ),
+                        Column(
+                          children: [
+                            IconButton(
+                              icon: const Icon(Icons.edit_outlined, color: Colors.blueAccent, size: 18),
+                              onPressed: () => _showNasabahDialog(nasabah: n),
+                              padding: EdgeInsets.zero,
+                              constraints: const BoxConstraints(),
+                            ),
+                            const SizedBox(height: 6),
+                            IconButton(
+                              icon: const Icon(Icons.lock_reset_rounded, color: Colors.orange, size: 18),
+                              onPressed: () => _resetNasabahPassword(n),
+                              padding: EdgeInsets.zero,
+                              constraints: const BoxConstraints(),
+                              tooltip: 'Reset Password',
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  );
+                },
+              ),
+      ),
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: () => _showNasabahDialog(),
+        backgroundColor: const Color(0xFF0F5A47),
+        icon: const Icon(Icons.person_add_rounded, color: Colors.white),
+        label: const Text('Buat Akun Nasabah', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+      ),
+    );
+  }
+
+  Widget _buildActivityLog() {
+    // Helpers are now defined as class-level methods
+
+    return Scaffold(
+      backgroundColor: Colors.transparent,
+      body: RefreshIndicator(
+        onRefresh: _loadData,
+        child: _activityLogs.isEmpty
+            ? Center(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    const Icon(Icons.history_rounded, size: 48, color: Color(0xFFCBD5E1)),
+                    const SizedBox(height: 12),
+                    const Text('Belum ada log aktivitas', style: TextStyle(color: AppColors.textMuted)),
+                    const SizedBox(height: 6),
+                    const Text('Log akan muncul setelah ada aktivitas nasabah', style: TextStyle(color: AppColors.textMuted, fontSize: 12)),
+                    const SizedBox(height: 20),
+                    // Tombol Test Koneksi — membantu verifikasi tabel & policy
+                    ElevatedButton.icon(
+                      onPressed: () async {
+                        final ok = await _svc.logActivity(
+                          userId: 'super_admin_test',
+                          role: 'super_admin',
+                          action: 'TEST_CONNECTION',
+                          description: 'Test koneksi log dari Super Admin Dashboard.',
+                        );
+                        if (!mounted) return;
+                        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                          content: Text(ok
+                              ? '✅ Log berhasil ditulis! Refresh untuk melihat.'
+                              : '❌ Gagal menulis log. Cek SQL Migration & RLS Policy.'),
+                          backgroundColor: ok ? Colors.green : Colors.red,
+                        ));
+                        if (ok) _loadData();
+                      },
+                      icon: const Icon(Icons.wifi_tethering_rounded, size: 18),
+                      label: const Text('Test Koneksi Log'),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF0F5A47),
+                        foregroundColor: Colors.white,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                      ),
+                    ),
+                  ],
+                ),
+              )
+            : ListView.separated(
+                padding: const EdgeInsets.fromLTRB(16, 16, 16, 80),
+                physics: const AlwaysScrollableScrollPhysics(),
+                itemCount: _activityLogs.length,
+                separatorBuilder: (_, __) => const SizedBox(height: 8),
+                itemBuilder: (context, i) {
+                  final log = _activityLogs[i];
+                  final action = log['action'] as String? ?? '-';
+                  final role = log['role'] as String? ?? 'nasabah';
+                  final description = log['description'] as String? ?? '';
+                  final createdAt = log['created_at'] as String?;
+                  final color = _actionColor(action);
+                  final icon = _actionIcon(action);
+
+                  return InkWell(
+                    onTap: () => _showLogDetailDialog(context, log),
+                    borderRadius: BorderRadius.circular(12),
+                    child: Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: const Color(0xFFE2E8F0)),
+                      ),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          // Icon badge
+                          Container(
+                            width: 36, height: 36,
+                            decoration: BoxDecoration(
+                              color: color.withValues(alpha: 0.12),
+                              shape: BoxShape.circle,
+                            ),
+                            child: Icon(icon, color: color, size: 18),
+                          ),
+                          const SizedBox(width: 10),
+                          // Content
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Row(
+                                  children: [
+                                    // Action chip
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                                      decoration: BoxDecoration(
+                                        color: color.withValues(alpha: 0.1),
+                                        borderRadius: BorderRadius.circular(20),
+                                        border: Border.all(color: color.withValues(alpha: 0.3)),
+                                      ),
+                                      child: Text(
+                                        action,
+                                        style: TextStyle(color: color, fontSize: 10, fontWeight: FontWeight.bold),
+                                      ),
+                                    ),
+                                    const SizedBox(width: 6),
+                                    // Role chip
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                      decoration: BoxDecoration(
+                                        color: _roleColor(role).withValues(alpha: 0.08),
+                                        borderRadius: BorderRadius.circular(20),
+                                      ),
+                                      child: Text(
+                                        role.toUpperCase(),
+                                        style: TextStyle(color: _roleColor(role), fontSize: 9, fontWeight: FontWeight.bold),
+                                      ),
+                                    ),
+                                    const SizedBox(width: 6),
+                                    // Priority chip
+                                    (() {
+                                      final prio = _getPriority(action);
+                                      final prioCol = _priorityColor(prio);
+                                      return Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                        decoration: BoxDecoration(
+                                          color: prioCol.withValues(alpha: 0.08),
+                                          borderRadius: BorderRadius.circular(20),
+                                          border: Border.all(color: prioCol.withValues(alpha: 0.2)),
+                                        ),
+                                        child: Row(
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            Container(
+                                              width: 5,
+                                              height: 5,
+                                              decoration: BoxDecoration(
+                                                color: prioCol,
+                                                shape: BoxShape.circle,
+                                              ),
+                                            ),
+                                            const SizedBox(width: 4),
+                                            Text(
+                                              prio,
+                                              style: TextStyle(color: prioCol, fontSize: 9, fontWeight: FontWeight.bold),
+                                            ),
+                                          ],
+                                        ),
+                                      );
+                                    }()),
+                                  ],
+                                ),
+                                const SizedBox(height: 4),
+                                if (description.isNotEmpty)
+                                  Text(
+                                    description,
+                                    style: const TextStyle(color: AppColors.textDark, fontSize: 12),
+                                  ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  '🕐 ${_formatLogTime(createdAt)}',
+                                  style: const TextStyle(color: AppColors.textMuted, fontSize: 10),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  );
+                },
+              ),
+      ),
+      floatingActionButton: FloatingActionButton(
+        mini: true,
+        onPressed: _loadData,
+        backgroundColor: const Color(0xFF0F5A47),
+        tooltip: 'Refresh Log',
+        child: const Icon(Icons.refresh_rounded, color: Colors.white),
+      ),
+    );
+  }
+
   Widget _buildKonfigurasi() {
     return SingleChildScrollView(
       physics: const BouncingScrollPhysics(),
@@ -754,17 +1660,33 @@ class _SuperAdminDashboardPageState extends State<SuperAdminDashboardPage> {
                   width: double.infinity,
                   height: 48,
                   child: ElevatedButton(
-                    onPressed: () {
+                    onPressed: () async {
+                      final newTariff = int.tryParse(_tariffCtrl.text) ?? SystemConfig.tariffPerUnit;
+                      final newUnit = int.tryParse(_unitAmountCtrl.text) ?? SystemConfig.unitAmount;
+                      final newMin = int.tryParse(_minTenorCtrl.text) ?? SystemConfig.minTenor;
+                      final newMax = int.tryParse(_maxTenorCtrl.text) ?? SystemConfig.maxTenor;
+                      final newAlert = int.tryParse(_alertDaysCtrl.text) ?? SystemConfig.alertDays;
+
+                      // Simpan ke Supabase
+                      await _svc.saveSystemConfig(
+                        tariffPerUnit: newTariff,
+                        unitAmount: newUnit,
+                        minTenor: newMin,
+                        maxTenor: newMax,
+                        alertDays: newAlert,
+                      );
+
                       setState(() {
-                        SystemConfig.tariffPerUnit = int.tryParse(_tariffCtrl.text) ?? SystemConfig.tariffPerUnit;
-                        SystemConfig.unitAmount = int.tryParse(_unitAmountCtrl.text) ?? SystemConfig.unitAmount;
-                        SystemConfig.minTenor = int.tryParse(_minTenorCtrl.text) ?? SystemConfig.minTenor;
-                        SystemConfig.maxTenor = int.tryParse(_maxTenorCtrl.text) ?? SystemConfig.maxTenor;
-                        SystemConfig.alertDays = int.tryParse(_alertDaysCtrl.text) ?? SystemConfig.alertDays;
+                        SystemConfig.tariffPerUnit = newTariff;
+                        SystemConfig.unitAmount = newUnit;
+                        SystemConfig.minTenor = newMin;
+                        SystemConfig.maxTenor = newMax;
+                        SystemConfig.alertDays = newAlert;
                       });
+                      if (!mounted) return;
                       ScaffoldMessenger.of(context).showSnackBar(
                         const SnackBar(
-                          content: Text('Konfigurasi sistem berhasil diperbarui secara global!'),
+                          content: Text('Konfigurasi sistem berhasil diperbarui dan disimpan!'),
                           backgroundColor: Colors.green,
                         ),
                       );

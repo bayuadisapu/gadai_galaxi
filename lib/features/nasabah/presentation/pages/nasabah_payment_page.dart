@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:galaxi_gadai/core/constants/app_colors.dart';
 import 'package:galaxi_gadai/core/data/mock_data.dart';
@@ -101,6 +102,8 @@ class _NasabahPaymentPageState extends State<NasabahPaymentPage>
         // ── TEBUS BARANG (LUNAS) ──
         await svc.updateTransactionStatus(tx.id, 'Lunas');
         tx.redeem();
+        // Log tebus barang
+        unawaited(svc.logNasabahRedeemed(tx.customerId, tx.id, '${tx.brand} ${tx.model}', _amountToPay));
       } else {
         // ── PERPANJANG TENOR ──
         final oldDueDate = tx.dateDue;
@@ -136,6 +139,9 @@ class _NasabahPaymentPageState extends State<NasabahPaymentPage>
         tx.periodDays = days;
         tx.totalFee = newTotalFee;
         tx.totalRepayment = newTotalRepayment;
+        
+        // Log perpanjangan tenor
+        unawaited(svc.logExtensionRequested(tx.customerId, tx.id));
       }
 
       if (!mounted) return;
