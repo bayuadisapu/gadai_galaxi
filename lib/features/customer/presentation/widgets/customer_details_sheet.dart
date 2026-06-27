@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:galaxi_gadai/core/constants/app_colors.dart';
 import 'package:galaxi_gadai/core/data/mock_data.dart';
+import 'package:galaxi_gadai/core/services/supabase_gadai_service.dart';
 import 'package:galaxi_gadai/features/pawn/presentation/pages/extension_page.dart';
 import 'package:galaxi_gadai/features/pawn/presentation/pages/redemption_page.dart';
 
@@ -17,6 +18,26 @@ class CustomerDetailsSheet extends StatefulWidget {
 }
 
 class _CustomerDetailsSheetState extends State<CustomerDetailsSheet> {
+  List<PawnTransaction> _customerTxs = [];
+  bool _isLoading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadTxs();
+  }
+
+  Future<void> _loadTxs() async {
+    try {
+      final txs = await SupabaseGadaiService.instance.fetchTransactions(nasabahId: widget.customer.id);
+      if (!mounted) return;
+      setState(() { _customerTxs = txs; _isLoading = false; });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _isLoading = false);
+    }
+  }
+
   String _formatCurrency(int val) {
     final s = val.toString();
     final buffer = StringBuffer();
@@ -30,16 +51,13 @@ class _CustomerDetailsSheetState extends State<CustomerDetailsSheet> {
   }
 
   String _formatIndonesianDate(DateTime date) {
-    final months = [
-      'Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun',
-      'Jul', 'Agt', 'Sep', 'Okt', 'Nov', 'Des'
-    ];
+    final months = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agt', 'Sep', 'Okt', 'Nov', 'Des'];
     return '${date.day.toString().padLeft(2, '0')} ${months[date.month - 1]} ${date.year}';
   }
 
   @override
   Widget build(BuildContext context) {
-    final customerTxs = mockTransactions.where((tx) => tx.customerId == widget.customer.id).toList();
+    final customerTxs = _customerTxs;
 
     return Container(
       height: MediaQuery.of(context).size.height * 0.82,

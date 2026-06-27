@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:galaxi_gadai/core/constants/app_colors.dart';
+import 'package:galaxi_gadai/core/services/supabase_gadai_service.dart';
 import 'package:galaxi_gadai/features/admin_cabang/presentation/pages/admin_cabang_dashboard_page.dart';
 
 class AdminCabangLoginPage extends StatefulWidget {
@@ -10,17 +11,13 @@ class AdminCabangLoginPage extends StatefulWidget {
 }
 
 class _AdminCabangLoginPageState extends State<AdminCabangLoginPage> {
-  final _formKey = GlobalKey<FormState>();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
-  bool _obscurePassword = true;
+  bool _obscure = true;
   bool _isLoading = false;
+  String? _errorMessage;
 
-  // Mock accounts admin cabang
-  static const _mockAccounts = {
-    'admin.surabaya@galaxi.id': {'password': 'admin123', 'cabang': 'Cabang Surabaya Pusat', 'nama': 'Eko Prasetyo'},
-    'admin.sidoarjo@galaxi.id': {'password': 'admin123', 'cabang': 'Cabang Sidoarjo', 'nama': 'Dewi Lestari'},
-  };
+  final _svc = SupabaseGadaiService.instance;
 
   @override
   void dispose() {
@@ -29,207 +26,148 @@ class _AdminCabangLoginPageState extends State<AdminCabangLoginPage> {
     super.dispose();
   }
 
-  void _handleLogin() async {
-    if (!_formKey.currentState!.validate()) return;
-    setState(() => _isLoading = true);
-    await Future.delayed(const Duration(milliseconds: 700));
-    if (!mounted) return;
-    setState(() => _isLoading = false);
-
-    final email = _emailController.text.trim();
+  void _login() async {
+    final username = _emailController.text.trim();
     final password = _passwordController.text;
-    final account = _mockAccounts[email];
 
-    if (account != null && account['password'] == password) {
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(
-          builder: (_) => AdminCabangDashboardPage(
-            namaAdmin: account['nama']!,
-            namaCabang: account['cabang']!,
-          ),
+    if (username.isEmpty || password.isEmpty) {
+      setState(() => _errorMessage = 'Username dan password wajib diisi');
+      return;
+    }
+
+    setState(() { _isLoading = true; _errorMessage = null; });
+
+    try {
+      final account = await _svc.loginStaff(username, password);
+      if (!mounted) return;
+      setState(() => _isLoading = false);
+
+      if (account == null || account['role'] != 'admin_cabang') {
+        setState(() => _errorMessage = 'Akun tidak ditemukan atau bukan Admin Cabang');
+        return;
+      }
+
+      final branchName = await _svc.getBranchName(account['cabangId']!);
+      if (!mounted) return;
+
+      Navigator.pushReplacement(context, MaterialPageRoute(
+        builder: (_) => AdminCabangDashboardPage(
+          namaAdmin: account['nama']!,
+          namaCabang: branchName,
+          cabangId: account['cabangId']!,
         ),
-      );
-    } else {
-      // Demo mode
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(
-          builder: (_) => const AdminCabangDashboardPage(
-            namaAdmin: 'Eko Prasetyo',
-            namaCabang: 'Cabang Surabaya Pusat',
-          ),
-        ),
-      );
+      ));
+    } catch (e) {
+      if (!mounted) return;
+      setState(() { _isLoading = false; _errorMessage = 'Error: ${e.toString()}'; });
     }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFFFFBEB),
-      body: LayoutBuilder(
-        builder: (context, constraints) {
-          return SingleChildScrollView(
-            child: ConstrainedBox(
-              constraints: BoxConstraints(minHeight: constraints.maxHeight),
-              child: IntrinsicHeight(
-                child: Column(
-                  children: [
-                    // Header Amber
-                    Container(
-                      width: double.infinity,
-                      padding: EdgeInsets.only(
-                        top: MediaQuery.of(context).padding.top + 36,
-                        bottom: 36,
-                        left: 24,
-                        right: 24,
-                      ),
-                      decoration: const BoxDecoration(
-                        gradient: LinearGradient(
-                          colors: [Color(0xFFB45309), Color(0xFFF59E0B)],
-                          begin: Alignment.topLeft,
-                          end: Alignment.bottomRight,
-                        ),
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          GestureDetector(
-                            onTap: () => Navigator.pop(context),
-                            child: Container(
-                              padding: const EdgeInsets.all(8),
-                              decoration: BoxDecoration(
-                                color: Colors.white.withValues(alpha: 0.2),
-                                borderRadius: BorderRadius.circular(10),
-                              ),
-                              child: const Icon(Icons.arrow_back_rounded, color: Colors.white, size: 20),
-                            ),
-                          ),
-                          const SizedBox(height: 24),
-                          Container(
-                            width: 52,
-                            height: 52,
-                            decoration: BoxDecoration(
-                              color: Colors.white.withValues(alpha: 0.2),
-                              shape: BoxShape.circle,
-                            ),
-                            child: const Icon(Icons.manage_accounts_rounded, color: Colors.white, size: 28),
-                          ),
-                          const SizedBox(height: 14),
-                          const Text('Login Admin Cabang', style: TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold)),
-                          const SizedBox(height: 4),
-                          Text('Akses laporan & manajemen cabang Anda', style: TextStyle(color: Colors.white.withValues(alpha: 0.8), fontSize: 13)),
-                        ],
-                      ),
-                    ),
+      backgroundColor: const Color(0xFFF8F9FC),
+      appBar: AppBar(
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        scrolledUnderElevation: 0,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back_rounded, color: AppColors.textDark),
+          onPressed: () => Navigator.pop(context),
+        ),
+      ),
+      body: SafeArea(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.symmetric(horizontal: 28),
+          child: Column(
+            children: [
+              const SizedBox(height: 40),
+              Container(
+                width: 72,
+                height: 72,
+                decoration: BoxDecoration(color: const Color(0xFFFFF7ED), shape: BoxShape.circle),
+                child: const Icon(Icons.manage_accounts_rounded, color: Color(0xFFF59E0B), size: 36),
+              ),
+              const SizedBox(height: 16),
+              const Text('Login Admin Cabang', style: TextStyle(color: AppColors.textDark, fontSize: 22, fontWeight: FontWeight.bold)),
+              const SizedBox(height: 6),
+              Text('Masukkan username dan password Anda', style: TextStyle(color: Colors.grey.shade500, fontSize: 14)),
+              const SizedBox(height: 32),
 
-                    // Form Card
-                    Expanded(
-                      child: Container(
-                        width: double.infinity,
-                        decoration: const BoxDecoration(
-                          color: Colors.white,
-                          borderRadius: BorderRadius.only(topLeft: Radius.circular(28), topRight: Radius.circular(28)),
-                        ),
-                        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
-                        child: Form(
-                          key: _formKey,
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              _buildLabel('Email Admin'),
-                              const SizedBox(height: 8),
-                              TextFormField(
-                                controller: _emailController,
-                                keyboardType: TextInputType.emailAddress,
-                                decoration: _inputDecoration('admin@galaxi.id', Icons.alternate_email_rounded),
-                                style: const TextStyle(color: AppColors.textDark, fontSize: 15),
-                                validator: (v) => v == null || v.trim().isEmpty ? 'Email tidak boleh kosong' : null,
-                              ),
-                              const SizedBox(height: 20),
-                              _buildLabel('Kata Sandi'),
-                              const SizedBox(height: 8),
-                              TextFormField(
-                                controller: _passwordController,
-                                obscureText: _obscurePassword,
-                                decoration: _inputDecoration('••••••••', Icons.lock_outline_rounded).copyWith(
-                                  suffixIcon: IconButton(
-                                    icon: Icon(_obscurePassword ? Icons.visibility_outlined : Icons.visibility_off_outlined, color: AppColors.textMuted, size: 20),
-                                    onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
-                                  ),
-                                ),
-                                style: const TextStyle(color: AppColors.textDark, fontSize: 15),
-                                validator: (v) => v == null || v.isEmpty ? 'Kata sandi tidak boleh kosong' : null,
-                              ),
-                              const SizedBox(height: 32),
-                              SizedBox(
-                                width: double.infinity,
-                                height: 52,
-                                child: ElevatedButton(
-                                  onPressed: _isLoading ? null : _handleLogin,
-                                  style: ElevatedButton.styleFrom(
-                                    backgroundColor: const Color(0xFFF59E0B),
-                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                                    elevation: 0,
-                                  ),
-                                  child: _isLoading
-                                      ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-                                      : const Text('Masuk', style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w600)),
-                                ),
-                              ),
-                              const SizedBox(height: 20),
-                              // Demo info
-                              Container(
-                                padding: const EdgeInsets.all(12),
-                                decoration: BoxDecoration(
-                                  color: const Color(0xFFFFF7ED),
-                                  borderRadius: BorderRadius.circular(10),
-                                  border: Border.all(color: const Color(0xFFFED7AA)),
-                                ),
-                                child: const Row(
-                                  children: [
-                                    Icon(Icons.info_outline_rounded, color: Color(0xFFF97316), size: 16),
-                                    SizedBox(width: 8),
-                                    Expanded(
-                                      child: Text(
-                                        'Demo: Tekan "Masuk" untuk masuk sebagai Admin Cabang Surabaya Pusat.',
-                                        style: TextStyle(color: Color(0xFFC2410C), fontSize: 12),
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
+              if (_errorMessage != null) ...[
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFFEF2F2),
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: const Color(0xFFFCA5A5)),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.error_outline_rounded, color: Color(0xFFEF4444), size: 18),
+                      const SizedBox(width: 8),
+                      Expanded(child: Text(_errorMessage!, style: const TextStyle(color: Color(0xFFEF4444), fontSize: 13))),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 16),
+              ],
+
+              TextField(
+                controller: _emailController,
+                style: const TextStyle(color: AppColors.textDark),
+                decoration: InputDecoration(
+                  labelText: 'Username',
+                  prefixIcon: const Icon(Icons.person_outline_rounded, color: AppColors.textMuted),
+                  filled: true, fillColor: Colors.white,
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
+                  enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
+                  focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFFF59E0B), width: 1.5)),
+                ),
+                onChanged: (_) => setState(() => _errorMessage = null),
+              ),
+              const SizedBox(height: 16),
+
+              TextField(
+                controller: _passwordController,
+                obscureText: _obscure,
+                style: const TextStyle(color: AppColors.textDark),
+                decoration: InputDecoration(
+                  labelText: 'Password',
+                  prefixIcon: const Icon(Icons.lock_outline_rounded, color: AppColors.textMuted),
+                  suffixIcon: IconButton(
+                    icon: Icon(_obscure ? Icons.visibility_off_outlined : Icons.visibility_outlined, color: AppColors.textMuted),
+                    onPressed: () => setState(() => _obscure = !_obscure),
+                  ),
+                  filled: true, fillColor: Colors.white,
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
+                  enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
+                  focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFFF59E0B), width: 1.5)),
+                ),
+                onChanged: (_) => setState(() => _errorMessage = null),
+              ),
+              const SizedBox(height: 28),
+
+              SizedBox(
+                width: double.infinity,
+                height: 52,
+                child: ElevatedButton(
+                  onPressed: _isLoading ? null : _login,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFFF59E0B),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                    elevation: 0,
+                  ),
+                  child: _isLoading
+                      ? const SizedBox(width: 22, height: 22, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2.5))
+                      : const Text('Masuk', style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
                 ),
               ),
-            ),
-          );
-        },
+            ],
+          ),
+        ),
       ),
     );
   }
-
-  Widget _buildLabel(String text) =>
-      Text(text, style: const TextStyle(color: AppColors.textInputLabel, fontSize: 14, fontWeight: FontWeight.w600));
-
-  InputDecoration _inputDecoration(String hint, IconData icon) => InputDecoration(
-        hintText: hint,
-        hintStyle: const TextStyle(color: AppColors.textInputHint, fontSize: 15),
-        prefixIcon: Icon(icon, color: AppColors.textMuted, size: 22),
-        filled: true,
-        fillColor: AppColors.inputBackground,
-        contentPadding: const EdgeInsets.symmetric(vertical: 16, horizontal: 16),
-        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
-        focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(color: Color(0xFFF59E0B), width: 1.5),
-        ),
-        errorBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Colors.red, width: 1)),
-      );
 }

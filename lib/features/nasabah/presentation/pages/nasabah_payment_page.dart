@@ -1,12 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:galaxi_gadai/core/constants/app_colors.dart';
 import 'package:galaxi_gadai/core/data/mock_data.dart';
+import 'package:galaxi_gadai/core/services/supabase_gadai_service.dart';
 import 'nasabah_payment_success_page.dart';
 
 class NasabahPaymentPage extends StatefulWidget {
   final PawnTransaction transaction;
+  final bool isRedemption; // true = tebus barang (lunas), false = perpanjang tenor
 
-  const NasabahPaymentPage({super.key, required this.transaction});
+  const NasabahPaymentPage({super.key, required this.transaction, this.isRedemption = false});
 
   @override
   State<NasabahPaymentPage> createState() => _NasabahPaymentPageState();
@@ -67,6 +69,12 @@ class _NasabahPaymentPageState extends State<NasabahPaymentPage>
   int get _jatipDibayar => widget.transaction.totalFee;
   DateTime get _newDueDate => widget.transaction.dateDue.add(Duration(days: _periodDays));
 
+  // Total tebusan untuk mode redeem
+  int get _totalRedemption => widget.transaction.principal + widget.transaction.totalFee;
+
+  // Jumlah yang harus dibayar tergantung mode
+  int get _amountToPay => widget.isRedemption ? _totalRedemption : _jatipDibayar;
+
   void _processPayment() async {
     if (_selectedMethod == null) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -80,52 +88,83 @@ class _NasabahPaymentPageState extends State<NasabahPaymentPage>
     }
 
     setState(() => _isProcessing = true);
-
-    // Simulate Midtrans processing delay
-    await Future.delayed(const Duration(milliseconds: 2800));
-
-    if (!mounted) return;
-
+    final svc = SupabaseGadaiService.instance;
     final tx = widget.transaction;
-    final oldDueDate = tx.dateDue;
-    final jatipDibayar = _jatipDibayar;
-    final days = _periodDays;
+    final methodLabel = _methods.firstWhere((m) => m['id'] == _selectedMethod)['label'] as String;
 
-    // Apply rollover business logic (identical to ExtensionPage)
-    mockExtensionHistory.add(ExtensionHistory(
-      id: 'EXT-PAY-${DateTime.now().millisecondsSinceEpoch}',
-      transactionId: tx.id,
-      jatipDibayar: jatipDibayar,
-      tglPerpanjangan: DateTime.now(),
-      tglTempoLama: oldDueDate,
-      tglTempoBaru: oldDueDate.add(Duration(days: days)),
-    ));
+    try {
+      // Simulate Midtrans processing delay
+      await Future.delayed(const Duration(milliseconds: 2800));
+      if (!mounted) return;
 
-    tx.dateDue = oldDueDate.add(Duration(days: days));
-    tx.status = 'Aktif';
-    tx.dateApplied = DateTime.now();
-    tx.periodDays = days;
-    tx.totalFee = tx.dailyFee * days;
-    tx.totalRepayment = tx.principal + tx.totalFee;
+      if (widget.isRedemption) {
+        // ── TEBUS BARANG (LUNAS) ──
+        await svc.updateTransactionStatus(tx.id, 'Lunas');
+        tx.redeem();
+      } else {
+        // ── PERPANJANG TENOR ──
+        final oldDueDate = tx.dateDue;
+        final jatipDibayar = _jatipDibayar;
+        final days = _periodDays;
+        final newDueDate = oldDueDate.add(Duration(days: days));
+        final newTotalFee = tx.dailyFee * days;
+        final newTotalRepayment = tx.principal + newTotalFee;
 
-    setState(() => _isProcessing = false);
+        await svc.createExtension(
+          ExtensionHistory(
+            id: '',
+            transactionId: tx.id,
+            jatipDibayar: jatipDibayar,
+            tglPerpanjangan: DateTime.now(),
+            tglTempoLama: oldDueDate,
+            tglTempoBaru: newDueDate,
+          ),
+          paymentMethod: methodLabel,
+        );
 
-    if (!mounted) return;
-    Navigator.pushReplacement(
-      context,
-      MaterialPageRoute(
-        builder: (_) => NasabahPaymentSuccessPage(
-          transaction: tx,
-          jatipDibayar: jatipDibayar,
-          newDueDate: tx.dateDue,
-          paymentMethod: _methods.firstWhere((m) => m['id'] == _selectedMethod)['label'] as String,
+        await svc.updateTransactionStatus(
+          tx.id, 'Aktif',
+          newDueDate: newDueDate,
+          periodDays: days,
+          totalFee: newTotalFee,
+          totalRepayment: newTotalRepayment,
+        );
+
+        tx.dateDue = newDueDate;
+        tx.status = 'Aktif';
+        tx.dateApplied = DateTime.now();
+        tx.periodDays = days;
+        tx.totalFee = newTotalFee;
+        tx.totalRepayment = newTotalRepayment;
+      }
+
+      if (!mounted) return;
+      setState(() => _isProcessing = false);
+
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(
+          builder: (_) => NasabahPaymentSuccessPage(
+            transaction: tx,
+            jatipDibayar: _amountToPay,
+            newDueDate: widget.isRedemption ? DateTime.now() : tx.dateDue,
+            paymentMethod: methodLabel,
+            isRedemption: widget.isRedemption,
+          ),
         ),
-      ),
-    );
+      );
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _isProcessing = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Pembayaran gagal: $e'), backgroundColor: const Color(0xFFEF4444), behavior: SnackBarBehavior.floating),
+      );
+    }
   }
 
   @override
   Widget build(BuildContext context) {
+    final title = widget.isRedemption ? 'Tebus Barang Jaminan' : 'Bayar Jasa Titip';
     return Scaffold(
       backgroundColor: const Color(0xFFF6F9FC),
       appBar: AppBar(
@@ -152,7 +191,7 @@ class _NasabahPaymentPageState extends State<NasabahPaymentPage>
               ),
             ),
             const SizedBox(width: 8),
-            const Text('Bayar Jasa Titip', style: TextStyle(color: AppColors.textDark, fontWeight: FontWeight.bold, fontSize: 16)),
+            Flexible(child: Text(title, style: const TextStyle(color: AppColors.textDark, fontWeight: FontWeight.bold, fontSize: 16), overflow: TextOverflow.ellipsis)),
           ],
         ),
       ),
@@ -221,8 +260,10 @@ class _NasabahPaymentPageState extends State<NasabahPaymentPage>
             width: double.infinity,
             padding: const EdgeInsets.all(18),
             decoration: BoxDecoration(
-              gradient: const LinearGradient(
-                colors: [Color(0xFF003F88), Color(0xFF0057BE)],
+              gradient: LinearGradient(
+                colors: widget.isRedemption
+                    ? [const Color(0xFF065F46), const Color(0xFF10B981)]
+                    : [const Color(0xFF003F88), const Color(0xFF0057BE)],
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
               ),
@@ -234,7 +275,10 @@ class _NasabahPaymentPageState extends State<NasabahPaymentPage>
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    const Text('Jasa Titip Wajib Dibayar', style: TextStyle(color: Colors.white70, fontSize: 12)),
+                    Text(
+                      widget.isRedemption ? 'Total Tebusan (Pokok + Jasa)' : 'Jasa Titip Wajib Dibayar',
+                      style: const TextStyle(color: Colors.white70, fontSize: 12),
+                    ),
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                       decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.2), borderRadius: BorderRadius.circular(8)),
@@ -244,7 +288,7 @@ class _NasabahPaymentPageState extends State<NasabahPaymentPage>
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  'Rp ${_formatCurrency(_jatipDibayar)}',
+                  'Rp ${_formatCurrency(_amountToPay)}',
                   style: const TextStyle(color: Colors.white, fontSize: 28, fontWeight: FontWeight.bold),
                 ),
                 const SizedBox(height: 12),
@@ -257,49 +301,96 @@ class _NasabahPaymentPageState extends State<NasabahPaymentPage>
                     Text('${widget.transaction.brand} ${widget.transaction.model}', style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w600)),
                   ],
                 ),
-                const SizedBox(height: 6),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    const Text('Jatuh Tempo Saat Ini', style: TextStyle(color: Colors.white70, fontSize: 12)),
-                    Text(_formatDate(widget.transaction.dateDue), style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w600)),
-                  ],
-                ),
+                if (widget.isRedemption) ...[
+                  const SizedBox(height: 6),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text('Pokok Pinjaman', style: TextStyle(color: Colors.white70, fontSize: 12)),
+                      Text('Rp ${_formatCurrency(widget.transaction.principal)}', style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w600)),
+                    ],
+                  ),
+                  const SizedBox(height: 6),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text('Jasa Titip', style: TextStyle(color: Colors.white70, fontSize: 12)),
+                      Text('Rp ${_formatCurrency(widget.transaction.totalFee)}', style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w600)),
+                    ],
+                  ),
+                ] else ...[
+                  const SizedBox(height: 6),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text('Jatuh Tempo Saat Ini', style: TextStyle(color: Colors.white70, fontSize: 12)),
+                      Text(_formatDate(widget.transaction.dateDue), style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w600)),
+                    ],
+                  ),
+                ],
               ],
             ),
           ),
           const SizedBox(height: 20),
 
-          // Tenor Selection
-          const Text('Tenor Perpanjangan', style: TextStyle(color: AppColors.textDark, fontSize: 14, fontWeight: FontWeight.w600)),
-          const SizedBox(height: 10),
-          Row(
-            children: ['15 Hari', '30 Hari'].map((p) {
-              final selected = _selectedPeriod == p;
-              return Expanded(
-                child: GestureDetector(
-                  onTap: () => setState(() => _selectedPeriod = p),
-                  child: Container(
-                    margin: EdgeInsets.only(right: p == '15 Hari' ? 10 : 0),
-                    padding: const EdgeInsets.symmetric(vertical: 14),
-                    decoration: BoxDecoration(
-                      color: selected ? AppColors.primary : Colors.white,
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: selected ? AppColors.primary : const Color(0xFFE2E8F0)),
-                    ),
-                    child: Column(
-                      children: [
-                        Text(p, style: TextStyle(color: selected ? Colors.white : AppColors.textDark, fontWeight: FontWeight.bold, fontSize: 14)),
-                        const SizedBox(height: 2),
-                        Text('Tempo baru: ${_formatDate(_newDueDate)}', style: TextStyle(color: selected ? Colors.white70 : AppColors.textMuted, fontSize: 10)),
-                      ],
+          // Tenor Selection — ONLY for perpanjang, not redeem
+          if (!widget.isRedemption) ...[
+            const Text('Tenor Perpanjangan', style: TextStyle(color: AppColors.textDark, fontSize: 14, fontWeight: FontWeight.w600)),
+            const SizedBox(height: 10),
+            Row(
+              children: ['15 Hari', '30 Hari'].map((p) {
+                final selected = _selectedPeriod == p;
+                return Expanded(
+                  child: GestureDetector(
+                    onTap: () => setState(() => _selectedPeriod = p),
+                    child: Container(
+                      margin: EdgeInsets.only(right: p == '15 Hari' ? 10 : 0),
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      decoration: BoxDecoration(
+                        color: selected ? AppColors.primary : Colors.white,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: selected ? AppColors.primary : const Color(0xFFE2E8F0)),
+                      ),
+                      child: Column(
+                        children: [
+                          Text(p, style: TextStyle(color: selected ? Colors.white : AppColors.textDark, fontWeight: FontWeight.bold, fontSize: 14)),
+                          const SizedBox(height: 2),
+                          Text('Tempo baru: ${_formatDate(_newDueDate)}', style: TextStyle(color: selected ? Colors.white70 : AppColors.textMuted, fontSize: 10)),
+                        ],
+                      ),
                     ),
                   ),
-                ),
-              );
-            }).toList(),
-          ),
-          const SizedBox(height: 20),
+                );
+              }).toList(),
+            ),
+            const SizedBox(height: 20),
+          ],
+
+          // Redemption info box
+          if (widget.isRedemption) ...[
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: const Color(0xFFECFDF5),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: const Color(0xFFA7F3D0)),
+              ),
+              child: const Row(
+                children: [
+                  Icon(Icons.info_outline_rounded, color: Color(0xFF059669), size: 18),
+                  SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      'Setelah pembayaran berhasil, barang jaminan Anda siap diambil di cabang.',
+                      style: TextStyle(color: Color(0xFF065F46), fontSize: 12),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 20),
+          ],
 
           // Payment Methods
           const Text('Metode Pembayaran', style: TextStyle(color: AppColors.textDark, fontSize: 14, fontWeight: FontWeight.w600)),
@@ -380,6 +471,11 @@ class _NasabahPaymentPageState extends State<NasabahPaymentPage>
   }
 
   Widget _buildPayButton() {
+    final buttonColor = widget.isRedemption ? const Color(0xFF065F46) : const Color(0xFF003F88);
+    final buttonText = widget.isRedemption
+        ? 'Tebus Rp ${_formatCurrency(_amountToPay)}'
+        : 'Bayar Rp ${_formatCurrency(_amountToPay)}';
+
     return Container(
       color: Colors.white,
       padding: const EdgeInsets.fromLTRB(20, 12, 20, 28),
@@ -389,17 +485,17 @@ class _NasabahPaymentPageState extends State<NasabahPaymentPage>
         child: ElevatedButton(
           onPressed: _processPayment,
           style: ElevatedButton.styleFrom(
-            backgroundColor: const Color(0xFF003F88),
+            backgroundColor: buttonColor,
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
             elevation: 0,
           ),
           child: Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              const Icon(Icons.lock_rounded, color: Colors.white, size: 18),
+              Icon(widget.isRedemption ? Icons.redeem_rounded : Icons.lock_rounded, color: Colors.white, size: 18),
               const SizedBox(width: 8),
               Text(
-                'Bayar Rp ${_formatCurrency(_jatipDibayar)}',
+                buttonText,
                 style: const TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.bold),
               ),
             ],

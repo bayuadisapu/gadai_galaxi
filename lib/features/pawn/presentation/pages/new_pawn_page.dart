@@ -1,14 +1,17 @@
 import 'package:flutter/material.dart';
 import 'package:galaxi_gadai/core/constants/app_colors.dart';
 import 'package:galaxi_gadai/core/data/mock_data.dart';
+import 'package:galaxi_gadai/core/services/supabase_gadai_service.dart';
 import '../widgets/new_pawn_shared_widgets.dart';
 import '../widgets/step_1_collateral_view.dart';
 import '../widgets/step_2_finance_view.dart';
 import '../widgets/step_3_biodata_view.dart';
 import '../widgets/success_dialog.dart';
+import 'package:galaxi_gadai/core/config/system_config.dart';
 
 class NewPawnPage extends StatefulWidget {
-  const NewPawnPage({super.key});
+  final String branchId;
+  const NewPawnPage({super.key, required this.branchId});
 
   @override
   State<NewPawnPage> createState() => _NewPawnPageState();
@@ -20,6 +23,7 @@ class _NewPawnPageState extends State<NewPawnPage> {
   final _step3FormKey = GlobalKey<FormState>();
 
   int _currentStep = 1; // 1: Jaminan, 2: Keuangan, 3: Data Diri
+  bool _isLoading = false;
 
   // --- Step 1 State ---
   String _selectedCollateral = 'Barang'; // 'Barang', 'Emas', 'Motor / Mobil'
@@ -55,10 +59,12 @@ class _NewPawnPageState extends State<NewPawnPage> {
   bool _hasStnk = false;
   bool _hasBpkb = false;
   bool _hasFaktur = false;
+  bool _barangPhotoUploaded = false;
 
   // --- Step 2 State ---
   final TextEditingController _pawnAmountController = TextEditingController(text: '700.000');
-  String _selectedPeriod = '15 Hari';
+  final TextEditingController _periodController = TextEditingController(text: '15');
+  String _adminFeePaymentMethod = 'Potong Pinjaman';
 
   // --- Step 3 State ---
   final TextEditingController _nikController = TextEditingController();
@@ -71,6 +77,8 @@ class _NewPawnPageState extends State<NewPawnPage> {
   String? _birthMonth;
   String? _birthYear;
   bool _ktpUploaded = false;
+  bool _customerAndBarangPhotoUploaded = false;
+  int? _customTaksiranOverride;
 
   @override
   void dispose() {
@@ -85,6 +93,7 @@ class _NewPawnPageState extends State<NewPawnPage> {
     _vehicleNoRangkaController.dispose();
     _vehicleNoPolisiController.dispose();
     _pawnAmountController.dispose();
+    _periodController.dispose();
     _nikController.dispose();
     _fullNameController.dispose();
     _phoneController.dispose();
@@ -99,6 +108,9 @@ class _NewPawnPageState extends State<NewPawnPage> {
   }
 
   int get _collateralTaksiranValue {
+    if (_customTaksiranOverride != null) {
+      return _customTaksiranOverride!;
+    }
     if (_selectedCollateral == 'Barang') {
       double basePrice = 3000000;
       if (_selectedBrand == 'Apple') basePrice = 12000000;
@@ -175,9 +187,20 @@ class _NewPawnPageState extends State<NewPawnPage> {
     }
   }
 
-  void _handleNextStep() {
+  Future<void> _handleNextStep() async {
     if (_currentStep == 1) {
       if (_step1FormKey.currentState!.validate()) {
+        if (!_barangPhotoUploaded) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Silakan unggah foto barang jaminan terlebih dahulu'),
+              backgroundColor: Colors.orange,
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+          return;
+        }
+
         // Prefill pawn amount dynamically to maximum estimate for high-fidelity flow
         final taksiranVal = _collateralTaksiranValue;
         // format and display in pawn amount controller
@@ -211,18 +234,24 @@ class _NewPawnPageState extends State<NewPawnPage> {
           );
           return;
         }
+        if (!_customerAndBarangPhotoUploaded) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Silakan unggah foto nasabah & barang jaminan terlebih dahulu'),
+              backgroundColor: Colors.orange,
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+          return;
+        }
 
-        // Save to mock database
-        final newCustId = 'N${mockCustomers.length + 101}';
-        final newTxId = 'TX${mockTransactions.length + 101}';
-        
         final dobDay = _birthDay ?? '01';
         final dobMonth = _birthMonth ?? 'Januari';
         final dobYear = _birthYear ?? '1990';
         final birthDateStr = '$dobDay $dobMonth $dobYear';
 
         final newCust = Customer(
-          id: newCustId,
+          id: '',
           name: _fullNameController.text.trim(),
           nik: _nikController.text.trim(),
           phone: _phoneController.text.trim(),
@@ -230,12 +259,12 @@ class _NewPawnPageState extends State<NewPawnPage> {
           birthPlace: _birthPlaceController.text.trim().isNotEmpty ? _birthPlaceController.text.trim() : 'Surabaya',
           birthDate: birthDateStr,
           gender: _selectedGender ?? 'Laki-laki',
+          cabangId: widget.branchId,
         );
         
-        final periodDays = _selectedPeriod == '15 Hari' ? 15 : 30;
+        final periodDays = int.tryParse(_periodController.text) ?? 15;
         final pawnAmt = _pawnAmountValue;
-        final int ceilTiers = pawnAmt > 0 ? ((pawnAmt / 500000).ceil()) : 0;
-        final int dailyFee = ceilTiers * 5000;
+        final int dailyFee = SystemConfig.calculateDailyFee(pawnAmt);
         final int totalFee = dailyFee * periodDays;
         final int totalRepayment = pawnAmt + totalFee;
         
@@ -257,32 +286,55 @@ class _NewPawnPageState extends State<NewPawnPage> {
           txModel = '${_vehicleNoPolisiController.text} (Tahun: ${_vehicleYearController.text})';
           txCondition = _selectedVehicleCondition ?? 'Prima';
         }
-        
-        final newTx = PawnTransaction(
-          id: newTxId,
-          customerId: newCustId,
-          collateralType: _selectedCollateral,
-          brand: txBrand,
-          model: txModel,
-          condition: txCondition,
-          principal: pawnAmt,
-          periodDays: periodDays,
-          dailyFee: dailyFee,
-          totalFee: totalFee,
-          totalRepayment: totalRepayment,
-          dateApplied: DateTime.now(),
-          dateDue: DateTime.now().add(Duration(days: periodDays)),
-          status: 'Aktif',
-        );
-        
-        mockCustomers.add(newCust);
-        mockTransactions.add(newTx);
 
-        showSuccessDialog(
-          context: context,
-          selectedCollateral: _selectedCollateral,
-          modelName: txModel,
-        );
+        final svc = SupabaseGadaiService.instance;
+        setState(() => _isLoading = true);
+
+        try {
+          final createdCust = await svc.createNasabah(newCust);
+
+          final newTx = PawnTransaction(
+            id: '',
+            customerId: createdCust.id,
+            cabangId: widget.branchId,
+            collateralType: _selectedCollateral,
+            brand: txBrand,
+            model: txModel,
+            condition: txCondition,
+            principal: pawnAmt,
+            periodDays: periodDays,
+            dailyFee: dailyFee,
+            totalFee: totalFee,
+            totalRepayment: totalRepayment,
+            dateApplied: DateTime.now(),
+            dateDue: DateTime.now().add(Duration(days: periodDays)),
+            status: 'Aktif',
+          );
+
+          await svc.createTransaction(newTx);
+
+          // Record admin fee to Tenant Wallet
+          TenantWallet.topUp(10000, 'Admin Fee Gadai - $txModel ($_adminFeePaymentMethod)');
+
+          if (!mounted) return;
+          setState(() => _isLoading = false);
+
+          showSuccessDialog(
+            context: context,
+            selectedCollateral: _selectedCollateral,
+            modelName: txModel,
+          );
+        } catch (e) {
+          if (!mounted) return;
+          setState(() => _isLoading = false);
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Gagal menyimpan transaksi: $e'),
+              backgroundColor: const Color(0xFFEF4444),
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+        }
       }
     }
   }
@@ -294,6 +346,8 @@ class _NewPawnPageState extends State<NewPawnPage> {
           formKey: _step1FormKey,
           selectedCollateral: _selectedCollateral,
           onCollateralSelected: _onCollateralSelected,
+          barangPhotoUploaded: _barangPhotoUploaded,
+          onBarangPhotoUploadedChanged: (val) => setState(() => _barangPhotoUploaded = val),
           
           selectedBarangType: _selectedBarangType,
           onBarangTypeChanged: (val) => setState(() => _selectedBarangType = val ?? 'Handphone'),
@@ -303,6 +357,8 @@ class _NewPawnPageState extends State<NewPawnPage> {
           selectedCondition: _selectedCondition,
           onConditionChanged: (val) => setState(() => _selectedCondition = val),
           noteController: _noteController,
+          customTaksiranOverride: _customTaksiranOverride,
+          onTaksiranOverrideChanged: (val) => setState(() => _customTaksiranOverride = val),
           deviceLock: _deviceLock,
           onDeviceLockChanged: (val) => setState(() => _deviceLock = val),
           hasCharger: _hasCharger,
@@ -344,8 +400,9 @@ class _NewPawnPageState extends State<NewPawnPage> {
         return Step2FinanceView(
           formKey: _step2FormKey,
           pawnAmountController: _pawnAmountController,
-          selectedPeriod: _selectedPeriod,
-          onPeriodChanged: (val) => setState(() => _selectedPeriod = val!),
+          periodController: _periodController,
+          adminFeePaymentMethod: _adminFeePaymentMethod,
+          onAdminFeePaymentMethodChanged: (val) => setState(() => _adminFeePaymentMethod = val!),
           onAmountChanged: () => setState(() {}),
           maxTaksiran: _collateralTaksiranValue,
         );
@@ -367,6 +424,8 @@ class _NewPawnPageState extends State<NewPawnPage> {
           onBirthYearChanged: (val) => setState(() => _birthYear = val),
           ktpUploaded: _ktpUploaded,
           onKtpUploadedChanged: (val) => setState(() => _ktpUploaded = val),
+          customerAndBarangPhotoUploaded: _customerAndBarangPhotoUploaded,
+          onCustomerAndBarangPhotoUploadedChanged: (val) => setState(() => _customerAndBarangPhotoUploaded = val),
         );
       default:
         return Container();
@@ -434,35 +493,42 @@ class _NewPawnPageState extends State<NewPawnPage> {
               width: double.infinity,
               height: 52,
               child: ElevatedButton(
-                onPressed: _handleNextStep,
+                onPressed: _isLoading ? null : _handleNextStep,
                 style: ElevatedButton.styleFrom(
                   backgroundColor: AppColors.primary,
+                  disabledBackgroundColor: AppColors.primary.withValues(alpha: 0.6),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(12),
                   ),
                   elevation: 0,
                 ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Text(
-                      _currentStep == 1
-                          ? 'Lanjut ke Keuangan'
-                          : (_currentStep == 2 ? 'Lanjut ke Data Diri' : 'Simpan & Proses'),
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 16,
-                        fontWeight: FontWeight.w600,
+                child: _isLoading
+                    ? const SizedBox(
+                        width: 22,
+                        height: 22,
+                        child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2.5),
+                      )
+                    : Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Text(
+                            _currentStep == 1
+                                ? 'Lanjut ke Keuangan'
+                                : (_currentStep == 2 ? 'Lanjut ke Data Diri' : 'Simpan & Proses'),
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 16,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          const Icon(
+                            Icons.arrow_forward_rounded,
+                            color: Colors.white,
+                            size: 20,
+                          ),
+                        ],
                       ),
-                    ),
-                    const SizedBox(width: 8),
-                    const Icon(
-                      Icons.arrow_forward_rounded,
-                      color: Colors.white,
-                      size: 20,
-                    ),
-                  ],
-                ),
               ),
             ),
           ),

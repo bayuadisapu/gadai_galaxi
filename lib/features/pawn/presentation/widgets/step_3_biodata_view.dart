@@ -22,6 +22,9 @@ class Step3BiodataView extends StatefulWidget {
   final bool ktpUploaded;
   final ValueChanged<bool> onKtpUploadedChanged;
 
+  final bool customerAndBarangPhotoUploaded;
+  final ValueChanged<bool> onCustomerAndBarangPhotoUploadedChanged;
+
   const Step3BiodataView({
     super.key,
     required this.formKey,
@@ -40,6 +43,8 @@ class Step3BiodataView extends StatefulWidget {
     required this.onBirthYearChanged,
     required this.ktpUploaded,
     required this.onKtpUploadedChanged,
+    required this.customerAndBarangPhotoUploaded,
+    required this.onCustomerAndBarangPhotoUploadedChanged,
   });
 
   @override
@@ -47,6 +52,46 @@ class Step3BiodataView extends StatefulWidget {
 }
 
 class _Step3BiodataViewState extends State<Step3BiodataView> {
+  bool _isOcrRunning = false;
+
+  void _runOcrSimulation() async {
+    if (widget.ktpUploaded) {
+      widget.onKtpUploadedChanged(false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Foto KTP dihapus')),
+      );
+      return;
+    }
+
+    setState(() => _isOcrRunning = true);
+    
+    await Future.delayed(const Duration(milliseconds: 2000));
+    
+    if (!mounted) return;
+    setState(() => _isOcrRunning = false);
+    
+    widget.onKtpUploadedChanged(true);
+    
+    widget.nikController.text = '3174092408930005';
+    widget.fullNameController.text = 'Budi Santoso';
+    widget.phoneController.text = '081298765432';
+    widget.addressController.text = 'Jl. Kemang Raya No. 45, Jakarta Selatan';
+    widget.birthPlaceController.text = 'Jakarta';
+    
+    widget.onGenderChanged('Laki-laki');
+    widget.onBirthDayChanged('24');
+    widget.onBirthMonthChanged('Agustus');
+    widget.onBirthYearChanged('1993');
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('OCR Berhasil: Data KTP berhasil diekstrak!'),
+        backgroundColor: Colors.green,
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+  }
+
   InputDecoration _getInputDecoration({String? hint}) {
     return InputDecoration(
       hintText: hint,
@@ -373,16 +418,7 @@ class _Step3BiodataViewState extends State<Step3BiodataView> {
             ),
             const SizedBox(height: 8),
             GestureDetector(
-              onTap: () {
-                widget.onKtpUploadedChanged(!widget.ktpUploaded);
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text(!widget.ktpUploaded ? 'Foto KTP berhasil diunggah' : 'Foto KTP dihapus'),
-                    backgroundColor: !widget.ktpUploaded ? Colors.green : Colors.grey,
-                    duration: const Duration(seconds: 1),
-                  ),
-                );
-              },
+              onTap: _isOcrRunning ? null : _runOcrSimulation,
               child: Container(
                 width: double.infinity,
                 padding: const EdgeInsets.symmetric(vertical: 24),
@@ -395,19 +431,84 @@ class _Step3BiodataViewState extends State<Step3BiodataView> {
                     style: BorderStyle.solid,
                   ),
                 ),
+                child: _isOcrRunning
+                    ? const Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          CircularProgressIndicator(color: AppColors.primary),
+                          SizedBox(height: 12),
+                          Text('Mengekstrak data KTP menggunakan AI...', style: TextStyle(color: AppColors.textMuted, fontSize: 13, fontWeight: FontWeight.bold)),
+                        ],
+                      )
+                    : Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(
+                            widget.ktpUploaded ? Icons.verified_user_rounded : Icons.camera_enhance_outlined,
+                            color: widget.ktpUploaded ? const Color(0xFF10B981) : const Color(0xFF64748B),
+                            size: 36,
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            widget.ktpUploaded ? 'KTP Terunggah (Ketuk untuk ganti)' : 'Unggah Foto KTP & Ekstrak Data Otomatis',
+                            style: TextStyle(
+                              color: widget.ktpUploaded ? const Color(0xFF047857) : const Color(0xFF64748B),
+                              fontWeight: FontWeight.bold,
+                              fontSize: 13,
+                            ),
+                          ),
+                        ],
+                      ),
+              ),
+            ),
+            const SizedBox(height: 20),
+
+            // Foto Nasabah & Barang Jaminan
+            const Text(
+              'Foto Nasabah & Barang Jaminan',
+              style: TextStyle(
+                color: AppColors.textDark,
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            const SizedBox(height: 8),
+            GestureDetector(
+              onTap: () {
+                widget.onCustomerAndBarangPhotoUploadedChanged(!widget.customerAndBarangPhotoUploaded);
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text(!widget.customerAndBarangPhotoUploaded ? 'Foto nasabah & barang jaminan berhasil diunggah' : 'Foto nasabah & barang jaminan dihapus'),
+                    backgroundColor: !widget.customerAndBarangPhotoUploaded ? Colors.green : Colors.grey,
+                    duration: const Duration(seconds: 1),
+                  ),
+                );
+              },
+              child: Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(vertical: 24),
+                decoration: BoxDecoration(
+                  color: widget.customerAndBarangPhotoUploaded ? const Color(0xFFECFDF5) : Colors.white,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: widget.customerAndBarangPhotoUploaded ? const Color(0xFF10B981) : const Color(0xFFCBD5E1),
+                    width: 1.5,
+                    style: BorderStyle.solid,
+                  ),
+                ),
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
                     Icon(
-                      widget.ktpUploaded ? Icons.verified_user_rounded : Icons.camera_enhance_outlined,
-                      color: widget.ktpUploaded ? const Color(0xFF10B981) : const Color(0xFF64748B),
+                      widget.customerAndBarangPhotoUploaded ? Icons.verified_user_rounded : Icons.camera_enhance_outlined,
+                      color: widget.customerAndBarangPhotoUploaded ? const Color(0xFF10B981) : const Color(0xFF64748B),
                       size: 36,
                     ),
                     const SizedBox(height: 8),
                     Text(
-                      widget.ktpUploaded ? 'KTP Terunggah (Ketuk untuk ganti)' : 'Unggah Foto KTP',
+                      widget.customerAndBarangPhotoUploaded ? 'Foto Nasabah & Barang Terunggah (Ketuk untuk ganti)' : 'Unggah Foto Nasabah & Barang Jaminan',
                       style: TextStyle(
-                        color: widget.ktpUploaded ? const Color(0xFF047857) : const Color(0xFF64748B),
+                        color: widget.customerAndBarangPhotoUploaded ? const Color(0xFF047857) : const Color(0xFF64748B),
                         fontWeight: FontWeight.bold,
                         fontSize: 13,
                       ),

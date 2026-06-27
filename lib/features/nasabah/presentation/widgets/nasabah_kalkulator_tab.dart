@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:galaxi_gadai/core/constants/app_colors.dart';
+import 'package:galaxi_gadai/core/config/system_config.dart';
 
 class NasabahKalkulatorTab extends StatefulWidget {
   const NasabahKalkulatorTab({super.key});
@@ -37,9 +38,8 @@ class _NasabahKalkulatorTabState extends State<NasabahKalkulatorTab> {
 
   @override
   Widget build(BuildContext context) {
-    final periodDays = _selectedPeriod == '15 Hari' ? 15 : 30;
-    final int ceilTiers = _pawnAmt > 0 ? ((_pawnAmt / 500000).ceil()) : 0;
-    final int dailyFee = ceilTiers * 5000;
+    final periodDays = _selectedPeriod == '15 Hari' ? SystemConfig.minTenor : SystemConfig.maxTenor;
+    final int dailyFee = SystemConfig.calculateDailyFee(_pawnAmt);
     final int totalFee = dailyFee * periodDays;
     final int totalRepayment = _pawnAmt + totalFee;
     final dueDate = DateTime.now().add(Duration(days: periodDays));

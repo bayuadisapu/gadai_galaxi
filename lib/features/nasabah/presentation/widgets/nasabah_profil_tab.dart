@@ -1,15 +1,38 @@
 import 'package:flutter/material.dart';
 import 'package:galaxi_gadai/core/constants/app_colors.dart';
 import 'package:galaxi_gadai/core/data/mock_data.dart';
+import 'package:galaxi_gadai/core/services/supabase_gadai_service.dart';
 
-class NasabahProfilTab extends StatelessWidget {
+class NasabahProfilTab extends StatefulWidget {
   final Customer customer;
   final VoidCallback onLogout;
 
   const NasabahProfilTab({super.key, required this.customer, required this.onLogout});
 
   @override
+  State<NasabahProfilTab> createState() => _NasabahProfilTabState();
+}
+
+class _NasabahProfilTabState extends State<NasabahProfilTab> {
+  List<PawnTransaction> _myTxs = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _loadTxs();
+  }
+
+  Future<void> _loadTxs() async {
+    try {
+      final txs = await SupabaseGadaiService.instance.fetchTransactions(nasabahId: widget.customer.id);
+      if (!mounted) return;
+      setState(() => _myTxs = txs);
+    } catch (_) {}
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final customer = widget.customer;
     return SingleChildScrollView(
       physics: const BouncingScrollPhysics(),
       padding: const EdgeInsets.all(20),
@@ -82,10 +105,9 @@ class NasabahProfilTab extends StatelessWidget {
                 const Text('Statistik Transaksi', style: TextStyle(color: AppColors.textDark, fontSize: 15, fontWeight: FontWeight.bold)),
                 const SizedBox(height: 16),
                 Builder(builder: (ctx) {
-                  final myTxs = mockTransactions.where((tx) => tx.customerId == customer.id).toList();
-                  final aktif = myTxs.where((tx) => tx.status == 'Aktif').length;
-                  final lunas = myTxs.where((tx) => tx.status == 'Lunas').length;
-                  final macet = myTxs.where((tx) => tx.status == 'Macet').length;
+                  final aktif = _myTxs.where((tx) => tx.status == 'Aktif').length;
+                  final lunas = _myTxs.where((tx) => tx.status == 'Lunas').length;
+                  final macet = _myTxs.where((tx) => tx.status == 'Macet').length;
                   return Row(
                     mainAxisAlignment: MainAxisAlignment.spaceAround,
                     children: [
@@ -105,7 +127,7 @@ class NasabahProfilTab extends StatelessWidget {
             width: double.infinity,
             height: 52,
             child: OutlinedButton.icon(
-              onPressed: onLogout,
+              onPressed: widget.onLogout,
               icon: const Icon(Icons.logout_rounded, color: Color(0xFFEF4444)),
               label: const Text('Keluar Akun', style: TextStyle(color: Color(0xFFEF4444), fontSize: 15, fontWeight: FontWeight.w600)),
               style: OutlinedButton.styleFrom(

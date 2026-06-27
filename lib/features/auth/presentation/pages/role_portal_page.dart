@@ -1,13 +1,92 @@
 import 'package:flutter/material.dart';
+import 'package:galaxi_gadai/core/services/supabase_gadai_service.dart';
+import 'package:galaxi_gadai/features/dashboard/presentation/pages/branch_dashboard_page.dart';
+import 'package:galaxi_gadai/features/admin_cabang/presentation/pages/admin_cabang_dashboard_page.dart';
+import 'package:galaxi_gadai/features/super_admin/presentation/pages/super_admin_dashboard_page.dart';
 import 'package:galaxi_gadai/features/auth/presentation/pages/staff_login_page.dart';
 import 'package:galaxi_gadai/features/auth/presentation/pages/nasabah_login_page.dart';
 
-
-class RolePortalPage extends StatelessWidget {
+class RolePortalPage extends StatefulWidget {
   const RolePortalPage({super.key});
 
   @override
+  State<RolePortalPage> createState() => _RolePortalPageState();
+}
+
+class _RolePortalPageState extends State<RolePortalPage> {
+  bool _checkingAuth = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _checkExistingSession();
+  }
+
+  Future<void> _checkExistingSession() async {
+    try {
+      final svc = SupabaseGadaiService.instance;
+      final staff = await svc.getCurrentStaff();
+      if (staff != null) {
+        final role = staff['role']!;
+        final branchId = staff['cabangId']!;
+        final branchName = await svc.getBranchName(branchId);
+        if (!mounted) return;
+        _navigateByRole(role, staff, branchName);
+      } else {
+        if (mounted) {
+          setState(() {
+            _checkingAuth = false;
+          });
+        }
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(() {
+          _checkingAuth = false;
+        });
+      }
+    }
+  }
+
+  void _navigateByRole(String role, Map<String, String> account, String branchName) {
+    switch (role) {
+      case 'verifikator':
+        Navigator.pushReplacement(context, MaterialPageRoute(
+          builder: (_) => BranchDashboardPage(cabangId: account['cabangId']!),
+        ));
+        break;
+      case 'admin_cabang':
+        Navigator.pushReplacement(context, MaterialPageRoute(
+          builder: (_) => AdminCabangDashboardPage(
+            namaAdmin: account['nama']!,
+            namaCabang: branchName,
+            cabangId: account['cabangId']!,
+          ),
+        ));
+        break;
+      case 'super_admin':
+        Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const SuperAdminDashboardPage()));
+        break;
+      default:
+        setState(() {
+          _checkingAuth = false;
+        });
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
+    if (_checkingAuth) {
+      return const Scaffold(
+        backgroundColor: Color(0xFF071120),
+        body: Center(
+          child: CircularProgressIndicator(
+            valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+          ),
+        ),
+      );
+    }
+
     return Scaffold(
       body: Container(
         width: double.infinity,

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:galaxi_gadai/core/constants/app_colors.dart';
 import 'package:galaxi_gadai/core/data/mock_data.dart';
+import 'package:galaxi_gadai/core/services/supabase_gadai_service.dart';
 
 class RedemptionPage extends StatefulWidget {
   final String? prefilledTxId;
@@ -15,42 +16,48 @@ class _RedemptionPageState extends State<RedemptionPage> {
   final _formKey = GlobalKey<FormState>();
   String? _selectedTxId;
   bool _isPaymentConfirmed = false;
+  final _svc = SupabaseGadaiService.instance;
+  List<PawnTransaction> _allTxs = [];
+  List<Customer> _allCustomers = [];
+  bool _isLoading = true;
 
   @override
   void initState() {
     super.initState();
-    if (widget.prefilledTxId != null) {
-      _selectedTxId = widget.prefilledTxId;
-    } else {
-      // Prefill with first active/macet tx if available
-      final activeTxs = mockTransactions.where((tx) => tx.status != 'Lunas').toList();
-      if (activeTxs.isNotEmpty) {
-        _selectedTxId = activeTxs.first.id;
+    _loadData();
+  }
+
+  Future<void> _loadData() async {
+    setState(() => _isLoading = true);
+    try {
+      final txs = await _svc.fetchTransactions();
+      final customers = await _svc.fetchNasabah();
+      if (!mounted) return;
+      setState(() { _allTxs = txs; _allCustomers = customers; _isLoading = false; });
+      if (widget.prefilledTxId != null) {
+        _selectedTxId = widget.prefilledTxId;
+      } else {
+        final activeTxs = _allTxs.where((tx) => tx.status != 'Lunas').toList();
+        if (activeTxs.isNotEmpty) _selectedTxId = activeTxs.first.id;
       }
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _isLoading = false);
     }
   }
 
-  // Get list of active/macet transactions for dropdown
   List<PawnTransaction> _getActiveTransactions() {
-    return mockTransactions.where((tx) => tx.status != 'Lunas').toList();
+    return _allTxs.where((tx) => tx.status != 'Lunas').toList();
   }
 
   PawnTransaction? _getSelectedTransaction() {
     if (_selectedTxId == null) return null;
-    try {
-      return mockTransactions.firstWhere((tx) => tx.id == _selectedTxId);
-    } catch (_) {
-      return null;
-    }
+    try { return _allTxs.firstWhere((tx) => tx.id == _selectedTxId); } catch (_) { return null; }
   }
 
   Customer? _getCustomerForTx(PawnTransaction? tx) {
     if (tx == null) return null;
-    try {
-      return mockCustomers.firstWhere((c) => c.id == tx.customerId);
-    } catch (_) {
-      return null;
-    }
+    try { return _allCustomers.firstWhere((c) => c.id == tx.customerId); } catch (_) { return null; }
   }
 
   String _formatCurrency(int val) {

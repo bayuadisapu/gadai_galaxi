@@ -1,12 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:galaxi_gadai/core/constants/app_colors.dart';
 import 'package:galaxi_gadai/core/data/mock_data.dart';
+import 'package:galaxi_gadai/core/services/supabase_gadai_service.dart';
 import '../widgets/customer_list_item.dart';
 import '../widgets/customer_details_sheet.dart';
 
 class CustomerSearchPage extends StatefulWidget {
   final bool isTab;
-  const CustomerSearchPage({super.key, this.isTab = false});
+  final String branchId;
+  const CustomerSearchPage({super.key, this.isTab = false, this.branchId = 'pusat'});
 
   @override
   State<CustomerSearchPage> createState() => _CustomerSearchPageState();
@@ -15,7 +17,30 @@ class CustomerSearchPage extends StatefulWidget {
 class _CustomerSearchPageState extends State<CustomerSearchPage> {
   final TextEditingController _searchController = TextEditingController();
   String _searchQuery = '';
-  String _activeFilter = 'Semua'; // 'Semua', 'Aktif', 'Jatuh Tempo', 'Macet'
+  String _activeFilter = 'Semua';
+  final _svc = SupabaseGadaiService.instance;
+  List<Customer> _customers = [];
+  List<PawnTransaction> _txs = [];
+  bool _isLoading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadData();
+  }
+
+  Future<void> _loadData() async {
+    setState(() => _isLoading = true);
+    try {
+      final customers = await _svc.fetchNasabah(branchId: widget.branchId);
+      final txs = await _svc.fetchTransactions(branchId: widget.branchId);
+      if (!mounted) return;
+      setState(() { _customers = customers; _txs = txs; _isLoading = false; });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _isLoading = false);
+    }
+  }
 
   @override
   void dispose() {
@@ -23,10 +48,8 @@ class _CustomerSearchPageState extends State<CustomerSearchPage> {
     super.dispose();
   }
 
-  // Helper to filter customers based on search and active tab filter
   List<Customer> _getFilteredCustomers() {
-    return mockCustomers.where((customer) {
-      // 1. Search Query Filter
+    return _customers.where((customer) {
       final nameMatch = customer.name.toLowerCase().contains(_searchQuery.toLowerCase());
       final nikMatch = customer.nik.contains(_searchQuery);
       final phoneMatch = customer.phone.contains(_searchQuery);
@@ -34,26 +57,18 @@ class _CustomerSearchPageState extends State<CustomerSearchPage> {
 
       if (!matchesSearch) return false;
 
-      // 2. Tab Filter based on customer's transaction statuses
-      final txs = mockTransactions.where((tx) => tx.customerId == customer.id).toList();
-      
-      if (_activeFilter == 'Semua') {
-        return true;
-      } else if (_activeFilter == 'Aktif') {
-        return txs.any((tx) => tx.status == 'Aktif');
-      } else if (_activeFilter == 'Jatuh Tempo') {
-        // Due in less than 7 days
-        return txs.any((tx) => tx.status == 'Aktif' && tx.dateDue.difference(DateTime.now()).inDays <= 7);
-      } else if (_activeFilter == 'Macet') {
-        return txs.any((tx) => tx.status == 'Macet');
-      }
+      final txs = _txs.where((tx) => tx.customerId == customer.id).toList();
+
+      if (_activeFilter == 'Semua') return true;
+      else if (_activeFilter == 'Aktif') return txs.any((tx) => tx.status == 'Aktif');
+      else if (_activeFilter == 'Jatuh Tempo') return txs.any((tx) => tx.status == 'Aktif' && tx.dateDue.difference(DateTime.now()).inDays <= 7);
+      else if (_activeFilter == 'Macet') return txs.any((tx) => tx.status == 'Macet');
       return true;
     }).toList();
   }
 
-  // Get active pawn summary count
   int _getActiveCount(Customer c) {
-    return mockTransactions.where((tx) => tx.customerId == c.id && (tx.status == 'Aktif' || tx.status == 'Macet')).length;
+    return _txs.where((tx) => tx.customerId == c.id && (tx.status == 'Aktif' || tx.status == 'Macet')).length;
   }
 
   void _showCustomerDetailsSheet(Customer customer) {
@@ -68,6 +83,115 @@ class _CustomerSearchPageState extends State<CustomerSearchPage> {
       // Re-trigger layout updates on close in case state changed
       setState(() {});
     });
+  }
+
+  void _showAddCustomerDialog() {
+    final formKey = GlobalKey<FormState>();
+    final nameCtrl = TextEditingController();
+    final nikCtrl = TextEditingController();
+    final phoneCtrl = TextEditingController();
+    final addressCtrl = TextEditingController();
+    String gender = 'Laki-laki';
+
+    showDialog(
+      context: context,
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            return AlertDialog(
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              title: const Text('Tambah Nasabah Baru', style: TextStyle(fontWeight: FontWeight.bold)),
+              content: SingleChildScrollView(
+                child: Form(
+                  key: formKey,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      TextFormField(
+                        controller: nameCtrl,
+                        decoration: const InputDecoration(labelText: 'Nama Lengkap'),
+                        validator: (v) => (v == null || v.isEmpty) ? 'Wajib diisi' : null,
+                      ),
+                      const SizedBox(height: 12),
+                      TextFormField(
+                        controller: nikCtrl,
+                        keyboardType: TextInputType.number,
+                        decoration: const InputDecoration(labelText: 'NIK'),
+                        validator: (v) => (v == null || v.length != 16) ? 'NIK harus 16 digit' : null,
+                      ),
+                      const SizedBox(height: 12),
+                      TextFormField(
+                        controller: phoneCtrl,
+                        keyboardType: TextInputType.phone,
+                        decoration: const InputDecoration(labelText: 'Nomor HP'),
+                        validator: (v) => (v == null || v.isEmpty) ? 'Wajib diisi' : null,
+                      ),
+                      const SizedBox(height: 12),
+                      TextFormField(
+                        controller: addressCtrl,
+                        decoration: const InputDecoration(labelText: 'Alamat Lengkap'),
+                        validator: (v) => (v == null || v.isEmpty) ? 'Wajib diisi' : null,
+                      ),
+                      const SizedBox(height: 16),
+                      DropdownButtonFormField<String>(
+                        value: gender,
+                        decoration: const InputDecoration(labelText: 'Jenis Kelamin'),
+                        items: const [
+                          DropdownMenuItem(value: 'Laki-laki', child: Text('Laki-laki')),
+                          DropdownMenuItem(value: 'Perempuan', child: Text('Perempuan')),
+                        ],
+                        onChanged: (val) {
+                          if (val != null) {
+                            setDialogState(() => gender = val);
+                          }
+                        },
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              actions: [
+                TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Batal')),
+                ElevatedButton(
+                  onPressed: () async {
+                    if (!formKey.currentState!.validate()) return;
+                    
+                    final newCust = Customer(
+                      id: '',
+                      name: nameCtrl.text.trim(),
+                      nik: nikCtrl.text.trim(),
+                      phone: phoneCtrl.text.trim(),
+                      address: addressCtrl.text.trim(),
+                      birthPlace: 'Surabaya',
+                      birthDate: '01 Jan 1990',
+                      gender: gender,
+                      cabangId: widget.branchId,
+                    );
+
+                    final navigator = Navigator.of(ctx);
+                    final messenger = ScaffoldMessenger.of(context);
+
+                    try {
+                      await _svc.createNasabah(newCust);
+                      navigator.pop();
+                      _loadData();
+                      messenger.showSnackBar(
+                        const SnackBar(content: Text('Nasabah baru berhasil ditambahkan!'), backgroundColor: Colors.green),
+                      );
+                    } catch (e) {
+                      messenger.showSnackBar(
+                        SnackBar(content: Text('Gagal menambahkan: $e'), backgroundColor: Colors.red),
+                      );
+                    }
+                  },
+                  child: const Text('Simpan'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
   }
 
   @override
@@ -189,6 +313,11 @@ class _CustomerSearchPageState extends State<CustomerSearchPage> {
                   ),
           ),
         ],
+      ),
+      floatingActionButton: FloatingActionButton(
+        onPressed: _showAddCustomerDialog,
+        backgroundColor: AppColors.primary,
+        child: const Icon(Icons.person_add_alt_1_rounded, color: Colors.white),
       ),
     );
   }

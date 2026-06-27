@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:galaxi_gadai/core/constants/app_colors.dart';
+import 'package:galaxi_gadai/core/services/gemini_taksiran_service.dart';
 import 'new_pawn_shared_widgets.dart';
 
 class Step1CollateralView extends StatefulWidget {
@@ -8,6 +9,9 @@ class Step1CollateralView extends StatefulWidget {
   final String selectedCollateral;
   final Function(String) onCollateralSelected;
   
+  final bool barangPhotoUploaded;
+  final ValueChanged<bool> onBarangPhotoUploadedChanged;
+
   // Barang form state & controllers
   final String selectedBarangType;
   final ValueChanged<String?> onBarangTypeChanged;
@@ -17,6 +21,8 @@ class Step1CollateralView extends StatefulWidget {
   final String? selectedCondition;
   final ValueChanged<String?> onConditionChanged;
   final TextEditingController noteController; 
+  final int? customTaksiranOverride;
+  final ValueChanged<int?>? onTaksiranOverrideChanged;
   final String deviceLock;
   final ValueChanged<String> onDeviceLockChanged;
   final bool hasCharger;
@@ -61,6 +67,8 @@ class Step1CollateralView extends StatefulWidget {
     required this.formKey,
     required this.selectedCollateral,
     required this.onCollateralSelected,
+    required this.barangPhotoUploaded,
+    required this.onBarangPhotoUploadedChanged,
     
     required this.selectedBarangType,
     required this.onBarangTypeChanged,
@@ -70,6 +78,8 @@ class Step1CollateralView extends StatefulWidget {
     required this.selectedCondition,
     required this.onConditionChanged,
     required this.noteController,
+    this.customTaksiranOverride,
+    this.onTaksiranOverrideChanged,
     required this.deviceLock,
     required this.onDeviceLockChanged,
     required this.hasCharger,
@@ -113,6 +123,73 @@ class Step1CollateralView extends StatefulWidget {
 }
 
 class _Step1CollateralViewState extends State<Step1CollateralView> {
+  bool _aiLoading = false;
+  String? _aiMinPrice;
+  String? _aiMaxPrice;
+  String? _aiRecPawn;
+  String? _aiNote;
+
+  void _runAiTaksiran() async {
+    final type = widget.selectedBarangType;
+    final brand = widget.selectedBrand ?? '';
+    final model = widget.modelController.text.trim();
+    final condition = widget.selectedCondition ?? '';
+    
+    if (brand.isEmpty || model.isEmpty || condition.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Pilih merk, tipe/model, dan kondisi terlebih dahulu untuk taksiran AI'),
+          backgroundColor: Colors.orange,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      return;
+    }
+    
+    setState(() => _aiLoading = true);
+    try {
+      final res = await GeminiTaksiranService.getTaksiran(
+        jenis: type,
+        merk: brand,
+        model: model,
+        kondisi: condition,
+      );
+      
+      setState(() {
+        _aiMinPrice = res.hargaPasarMin;
+        _aiMaxPrice = res.hargaPasarMax;
+        _aiRecPawn = res.rekomendasiGadai;
+        _aiNote = res.catatan;
+        _aiLoading = false;
+      });
+
+      final cleanVal = res.rekomendasiGadai.replaceAll(RegExp(r'[^0-9]'), '');
+      final int val = int.tryParse(cleanVal) ?? 0;
+      if (val > 0 && widget.onTaksiranOverrideChanged != null) {
+        widget.onTaksiranOverrideChanged!(val);
+      }
+
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('AI Taksiran berhasil terupdate!'),
+          backgroundColor: Colors.green,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _aiLoading = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Gagal taksir AI: $e'),
+          backgroundColor: Colors.red,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    }
+  }
+
   final Map<String, List<String>> _brandsPerType = {
     'Handphone': ['Apple', 'Samsung', 'Xiaomi', 'Oppo'],
     'Laptop': ['ASUS', 'Lenovo', 'HP', 'Dell', 'Acer', 'Apple'],
@@ -331,7 +408,68 @@ class _Step1CollateralViewState extends State<Step1CollateralView> {
           ),
           child: Form(
             key: widget.formKey,
-            child: _buildDynamicForm(),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _buildDynamicForm(),
+                const SizedBox(height: 24),
+                const Divider(color: Color(0xFFE2E8F0)),
+                const SizedBox(height: 20),
+                const Text(
+                  'Foto Barang Gadai',
+                  style: TextStyle(
+                    color: AppColors.textDark,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                GestureDetector(
+                  onTap: () {
+                    widget.onBarangPhotoUploadedChanged(!widget.barangPhotoUploaded);
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text(!widget.barangPhotoUploaded ? 'Foto barang gadai berhasil diunggah' : 'Foto barang gadai dihapus'),
+                        backgroundColor: !widget.barangPhotoUploaded ? Colors.green : Colors.grey,
+                        duration: const Duration(seconds: 1),
+                      ),
+                    );
+                  },
+                  child: Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.symmetric(vertical: 24),
+                    decoration: BoxDecoration(
+                      color: widget.barangPhotoUploaded ? const Color(0xFFECFDF5) : Colors.white,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: widget.barangPhotoUploaded ? const Color(0xFF10B981) : const Color(0xFFCBD5E1),
+                        width: 1.5,
+                        style: BorderStyle.solid,
+                      ),
+                    ),
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(
+                          widget.barangPhotoUploaded ? Icons.verified_user_rounded : Icons.camera_enhance_outlined,
+                          color: widget.barangPhotoUploaded ? const Color(0xFF10B981) : const Color(0xFF64748B),
+                          size: 36,
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          widget.barangPhotoUploaded ? 'Foto Barang Terunggah (Ketuk untuk ganti)' : 'Unggah Foto Barang Gadai',
+                          style: TextStyle(
+                            color: widget.barangPhotoUploaded ? const Color(0xFF047857) : const Color(0xFF64748B),
+                            fontWeight: FontWeight.bold,
+                            fontSize: 13,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ],
@@ -357,6 +495,92 @@ class _Step1CollateralViewState extends State<Step1CollateralView> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        // ===== Card AI Gemini Taksiran =====
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(16),
+          margin: const EdgeInsets.only(bottom: 20),
+          decoration: BoxDecoration(
+            gradient: const LinearGradient(
+              colors: [Color(0xFFECFDF5), Color(0xFFD1FAE5)],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: const Color(0xFF10B981)),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Row(
+                    children: [
+                      Icon(Icons.auto_awesome_rounded, color: Color(0xFF10B981), size: 20),
+                      SizedBox(width: 6),
+                      Text(
+                        'Gemini AI Taksiran',
+                        style: TextStyle(color: Color(0xFF047857), fontSize: 13, fontWeight: FontWeight.bold),
+                      ),
+                    ],
+                  ),
+                  if (_aiLoading)
+                    const SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF10B981)),
+                    )
+                  else
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                      decoration: BoxDecoration(color: const Color(0xFF10B981), borderRadius: BorderRadius.circular(8)),
+                      child: const Text('READY', style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold)),
+                    ),
+                ],
+              ),
+              const SizedBox(height: 10),
+              if (_aiRecPawn != null) ...[
+                Text(
+                  'Rekomendasi Pinjaman: $_aiRecPawn',
+                  style: const TextStyle(color: Color(0xFF065F46), fontSize: 18, fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  'Harga Pasar: $_aiMinPrice - $_aiMaxPrice',
+                  style: const TextStyle(color: Color(0xFF047857), fontSize: 12),
+                ),
+                if (_aiNote != null && _aiNote!.isNotEmpty) ...[
+                  const SizedBox(height: 8),
+                  Text(
+                    'Catatan AI: $_aiNote',
+                    style: const TextStyle(color: Color(0xFF065F46), fontSize: 11, fontStyle: FontStyle.italic),
+                  ),
+                ],
+                const SizedBox(height: 12),
+                const Divider(color: Color(0xFF10B981)),
+                const SizedBox(height: 8),
+              ],
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton.icon(
+                  onPressed: _aiLoading ? null : _runAiTaksiran,
+                  icon: const Icon(Icons.bolt_rounded, size: 18, color: Colors.white),
+                  label: const Text(
+                    'Taksir Nilai Gadai dengan Gemini AI',
+                    style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12),
+                  ),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF047857),
+                    padding: const EdgeInsets.symmetric(vertical: 10),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                    elevation: 0,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
         const Text(
           'Jenis Barang',
           style: TextStyle(color: AppColors.textDark, fontSize: 14, fontWeight: FontWeight.w600),

@@ -6,9 +6,10 @@ import '../pages/nasabah_payment_page.dart';
 
 class NasabahHomeTab extends StatelessWidget {
   final Customer customer;
+  final List<PawnTransaction> transactions;
   final Function(int) onTabChanged;
 
-  const NasabahHomeTab({super.key, required this.customer, required this.onTabChanged});
+  const NasabahHomeTab({super.key, required this.customer, required this.transactions, required this.onTabChanged});
 
   String _formatCurrency(int val) {
     final s = val.toString();
@@ -27,7 +28,7 @@ class NasabahHomeTab extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final myTxs = mockTransactions.where((tx) => tx.customerId == customer.id).toList();
+    final myTxs = transactions.where((tx) => tx.customerId == customer.id).toList();
     final activeTxs = myTxs.where((tx) => tx.status == 'Aktif' || tx.status == 'Perlu_Bayar_Jatip').toList();
     final today = DateTime.now();
 
@@ -212,25 +213,54 @@ class NasabahHomeTab extends StatelessWidget {
                         ),
                         if (isOverdue || isNearDue) ...[
                           const SizedBox(height: 10),
-                          SizedBox(
-                            width: double.infinity,
-                            height: 40,
-                            child: ElevatedButton.icon(
-                              icon: const Icon(Icons.autorenew_rounded, size: 16, color: Colors.white),
-                              label: Text(
-                                isOverdue ? 'Bayar & Perpanjang Sekarang' : 'Perpanjang Tenor',
-                                style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
+                          Row(
+                            children: [
+                              Expanded(
+                                child: SizedBox(
+                                  height: 40,
+                                  child: ElevatedButton.icon(
+                                    icon: const Icon(Icons.autorenew_rounded, size: 14, color: Colors.white),
+                                    label: Text(
+                                      isOverdue ? 'Perpanjang' : 'Perpanjang Tenor',
+                                      style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold),
+                                    ),
+                                    onPressed: () => Navigator.push(
+                                      context,
+                                      MaterialPageRoute(builder: (_) => NasabahPaymentPage(transaction: tx)),
+                                    ),
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: isOverdue ? const Color(0xFFEF4444) : const Color(0xFF003F88),
+                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                      elevation: 0,
+                                      padding: const EdgeInsets.symmetric(horizontal: 8),
+                                    ),
+                                  ),
+                                ),
                               ),
-                              onPressed: () => Navigator.push(
-                                context,
-                                MaterialPageRoute(builder: (_) => NasabahPaymentPage(transaction: tx)),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: SizedBox(
+                                  height: 40,
+                                  child: ElevatedButton.icon(
+                                    icon: const Icon(Icons.redeem_rounded, size: 14, color: Colors.white),
+                                    label: const Text(
+                                      'Tebus Barang',
+                                      style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold),
+                                    ),
+                                    onPressed: () => Navigator.push(
+                                      context,
+                                      MaterialPageRoute(builder: (_) => NasabahPaymentPage(transaction: tx, isRedemption: true)),
+                                    ),
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: const Color(0xFF065F46),
+                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                      elevation: 0,
+                                      padding: const EdgeInsets.symmetric(horizontal: 8),
+                                    ),
+                                  ),
+                                ),
                               ),
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: isOverdue ? const Color(0xFFEF4444) : const Color(0xFF003F88),
-                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                                elevation: 0,
-                              ),
-                            ),
+                            ],
                           ),
                         ],
                         if (isOverdue) ...[

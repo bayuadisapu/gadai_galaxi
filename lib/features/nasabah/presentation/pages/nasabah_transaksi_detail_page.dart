@@ -1,11 +1,34 @@
 import 'package:flutter/material.dart';
 import 'package:galaxi_gadai/core/constants/app_colors.dart';
 import 'package:galaxi_gadai/core/data/mock_data.dart';
+import 'package:galaxi_gadai/core/services/supabase_gadai_service.dart';
 import 'nasabah_payment_page.dart';
+import 'package:galaxi_gadai/core/config/system_config.dart';
 
-class NasabahTransaksiDetailPage extends StatelessWidget {
+class NasabahTransaksiDetailPage extends StatefulWidget {
   final PawnTransaction transaction;
   const NasabahTransaksiDetailPage({super.key, required this.transaction});
+
+  @override
+  State<NasabahTransaksiDetailPage> createState() => _NasabahTransaksiDetailPageState();
+}
+
+class _NasabahTransaksiDetailPageState extends State<NasabahTransaksiDetailPage> {
+  List<ExtensionHistory> _extensions = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _loadExtensions();
+  }
+
+  Future<void> _loadExtensions() async {
+    try {
+      final ext = await SupabaseGadaiService.instance.fetchExtensionHistory(widget.transaction.id);
+      if (!mounted) return;
+      setState(() => _extensions = ext);
+    } catch (_) {}
+  }
 
   String _formatCurrency(int val) {
     final s = val.toString();
@@ -29,20 +52,18 @@ class NasabahTransaksiDetailPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final tx = transaction;
+    final tx = widget.transaction;
     final today = DateTime.now();
     final daysLeft = tx.dateDue.difference(today).inDays;
     final isOverdue = daysLeft < 0;
 
-    // Hitung jasa harian dengan formula yang benar
-    final int ceilTiers = tx.principal > 0 ? ((tx.principal / 500000).ceil()) : 0;
-    final int dailyFeeCalc = ceilTiers * 5000;
+    final int dailyFeeCalc = SystemConfig.calculateDailyFee(tx.principal);
 
     Color statusColor = AppColors.primary;
     if (tx.status == 'Macet') statusColor = const Color(0xFFEF4444);
     else if (tx.status == 'Lunas') statusColor = const Color(0xFF10B981);
 
-    final extensionHistory = mockExtensionHistory.where((e) => e.transactionId == tx.id).toList();
+    final extensionHistory = _extensions;
 
     return Scaffold(
       backgroundColor: const Color(0xFFF6F9FC),
@@ -255,26 +276,53 @@ class NasabahTransaksiDetailPage extends StatelessWidget {
           ],
         ),
       ),
-      // CTA Perpanjang Tenor
+      // CTA Perpanjang & Tebus
       bottomNavigationBar: tx.status != 'Lunas'
           ? Container(
               color: Colors.white,
               padding: const EdgeInsets.fromLTRB(20, 12, 20, 28),
-              child: SizedBox(
-                height: 52,
-                child: ElevatedButton.icon(
-                  icon: const Icon(Icons.autorenew_rounded, color: Colors.white, size: 20),
-                  label: const Text('Perpanjang Tenor via Midtrans', style: TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.bold)),
-                  onPressed: () => Navigator.push(
-                    context,
-                    MaterialPageRoute(builder: (_) => NasabahPaymentPage(transaction: tx)),
+              child: Row(
+                children: [
+                  // Perpanjang Tenor
+                  Expanded(
+                    child: SizedBox(
+                      height: 52,
+                      child: ElevatedButton.icon(
+                        icon: const Icon(Icons.autorenew_rounded, color: Colors.white, size: 18),
+                        label: const Text('Perpanjang', style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold)),
+                        onPressed: () => Navigator.push(
+                          context,
+                          MaterialPageRoute(builder: (_) => NasabahPaymentPage(transaction: tx)),
+                        ),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF003F88),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                          elevation: 0,
+                        ),
+                      ),
+                    ),
                   ),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF003F88),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                    elevation: 0,
+                  const SizedBox(width: 12),
+                  // Tebus Barang (Lunas)
+                  Expanded(
+                    child: SizedBox(
+                      height: 52,
+                      child: ElevatedButton.icon(
+                        icon: const Icon(Icons.redeem_rounded, color: Colors.white, size: 18),
+                        label: const Text('Tebus Barang', style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold)),
+                        onPressed: () => Navigator.push(
+                          context,
+                          MaterialPageRoute(builder: (_) => NasabahPaymentPage(transaction: tx, isRedemption: true)),
+                        ),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF065F46),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                          elevation: 0,
+                        ),
+                      ),
+                    ),
                   ),
-                ),
+                ],
               ),
             )
           : null,

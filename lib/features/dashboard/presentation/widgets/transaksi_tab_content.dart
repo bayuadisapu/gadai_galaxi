@@ -6,11 +6,15 @@ import 'package:galaxi_gadai/features/pawn/presentation/pages/redemption_page.da
 import 'package:galaxi_gadai/features/pawn/presentation/pages/transaksi_detail_page.dart';
 
 class TransaksiTabContent extends StatefulWidget {
+  final List<PawnTransaction> transactions;
+  final List<Customer> customers;
   final String initialFilter;
   final VoidCallback onRefreshParent;
 
   const TransaksiTabContent({
     super.key,
+    required this.transactions,
+    required this.customers,
     this.initialFilter = 'Semua',
     required this.onRefreshParent,
   });
@@ -64,8 +68,8 @@ class _TransaksiTabContentState extends State<TransaksiTabContent> {
 
   @override
   Widget build(BuildContext context) {
-    final filteredTxs = mockTransactions.where((tx) {
-      final customer = mockCustomers.firstWhere(
+    final filteredTxs = widget.transactions.where((tx) {
+      final customer = widget.customers.firstWhere(
         (c) => c.id == tx.customerId,
         orElse: () => Customer(id: '', name: '', nik: '', birthPlace: '', birthDate: '', gender: '', phone: '', address: ''),
       );
@@ -147,7 +151,7 @@ class _TransaksiTabContentState extends State<TransaksiTabContent> {
                   separatorBuilder: (context, index) => const SizedBox(height: 14),
                   itemBuilder: (context, index) {
                     final tx = filteredTxs[index];
-                    final customer = mockCustomers.firstWhere(
+                    final customer = widget.customers.firstWhere(
                       (c) => c.id == tx.customerId,
                       orElse: () => Customer(id: '', name: 'Nasabah Tidak Dikenal', nik: '', birthPlace: '', birthDate: '', gender: '', phone: '', address: ''),
                     );

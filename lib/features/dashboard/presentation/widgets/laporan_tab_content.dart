@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:galaxi_gadai/core/constants/app_colors.dart';
 
@@ -11,6 +12,43 @@ class LaporanTabContent extends StatefulWidget {
 class _LaporanTabContentState extends State<LaporanTabContent> {
   String _selectedRange = 'Bulanan'; // 'Harian', 'Mingguan', 'Bulanan'
   int _selectedMonthIndex = 5; // June 2026
+  bool _isExporting = false;
+
+  void _exportLaporan() async {
+    setState(() => _isExporting = true);
+    
+    await Future.delayed(const Duration(milliseconds: 1800));
+    
+    try {
+      final month = _months[_selectedMonthIndex];
+      final fileName = 'laporan_gadai_${month.toLowerCase().replaceAll(' ', '_')}.csv';
+      
+      final file = File(fileName);
+      await file.writeAsString('''Tanggal,Kontrak,Kategori,Barang,Nasabah,Nilai Pokok,Jasa Titip,Status
+2026-06-01,TX-001,Handphone,iPhone 14 Pro,Budi Santoso,7000000,525000,Lunas
+2026-06-05,TX-002,Emas,Cincin Emas 24K 5g,Dewi Lestari,5750000,431250,Lunas
+2026-06-12,TX-003,Motor / Mobil,Honda Vario 2021,Ahmad Fauzi,12000000,900000,Aktif
+2026-06-18,TX-004,Laptop,Asus ROG Zephyrus,Kevin Wijaya,15000000,1125000,Aktif
+2026-06-25,TX-005,Handphone,Xiaomi Redmi Note 12,Ririn,1500000,112500,Macet
+''');
+      
+      setState(() => _isExporting = false);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Laporan berhasil diekspor ke file: $fileName'),
+          backgroundColor: Colors.green,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    } catch (e) {
+      setState(() => _isExporting = false);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Gagal mengekspor: $e'), backgroundColor: Colors.red),
+      );
+    }
+  }
 
   final List<String> _months = [
     'Januari 2026', 'Februari 2026', 'Maret 2026', 'April 2026', 'Mei 2026', 'Juni 2026',
@@ -132,6 +170,27 @@ class _LaporanTabContentState extends State<LaporanTabContent> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                ElevatedButton.icon(
+                  onPressed: _isExporting ? null : _exportLaporan,
+                  icon: _isExporting
+                      ? const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                        )
+                      : const Icon(Icons.download_rounded, color: Colors.white),
+                  label: Text(
+                    _isExporting ? 'Mengekspor Laporan...' : 'Ekspor Laporan Bulanan (CSV)',
+                    style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                  ),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF10B981),
+                    minimumSize: const Size(double.infinity, 48),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    elevation: 0,
+                  ),
+                ),
+                const SizedBox(height: 16),
                 // Total Jasa Titip Summary Card (Blue Gradient)
                 Container(
                   width: double.infinity,

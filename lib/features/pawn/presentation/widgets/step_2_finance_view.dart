@@ -1,11 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:galaxi_gadai/core/constants/app_colors.dart';
+import 'package:galaxi_gadai/core/config/system_config.dart';
 
 class Step2FinanceView extends StatelessWidget {
   final GlobalKey<FormState> formKey;
   final TextEditingController pawnAmountController;
-  final String selectedPeriod;
-  final ValueChanged<String?> onPeriodChanged;
+  final TextEditingController periodController;
+  final String adminFeePaymentMethod;
+  final ValueChanged<String?> onAdminFeePaymentMethodChanged;
   final VoidCallback onAmountChanged;
   final int maxTaksiran;
 
@@ -13,8 +15,9 @@ class Step2FinanceView extends StatelessWidget {
     super.key,
     required this.formKey,
     required this.pawnAmountController,
-    required this.selectedPeriod,
-    required this.onPeriodChanged,
+    required this.periodController,
+    required this.adminFeePaymentMethod,
+    required this.onAdminFeePaymentMethodChanged,
     required this.onAmountChanged,
     required this.maxTaksiran,
   });
@@ -47,11 +50,10 @@ class Step2FinanceView extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final pawnAmt = _pawnAmountValue;
-    final periodDays = selectedPeriod == '15 Hari' ? 15 : 30;
+    final periodDays = int.tryParse(periodController.text) ?? 15;
 
     // Formula SRS: Rhari = ⌈N / 500.000⌉ × 5.000
-    final int ceilTiers = pawnAmt > 0 ? ((pawnAmt / 500000).ceil()) : 0;
-    final int dailyFee = ceilTiers * 5000;
+    final int dailyFee = SystemConfig.calculateDailyFee(pawnAmt);
     final int totalFee = dailyFee * periodDays;
     final int totalRepayment = pawnAmt + totalFee;
 
@@ -61,7 +63,10 @@ class Step2FinanceView extends StatelessWidget {
     final String dateStart = _formatIndonesianDate(today);
     final String dateEnd = _formatIndonesianDate(dueDate);
 
-    final List<String> periods = ['15 Hari', '30 Hari'];
+    final int adminFee = 10000;
+    final int moneyReceived = adminFeePaymentMethod == 'Potong Pinjaman'
+        ? (pawnAmt - adminFee).clamp(0, pawnAmt)
+        : pawnAmt;
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
@@ -163,9 +168,9 @@ class Step2FinanceView extends StatelessWidget {
             ),
             const SizedBox(height: 24),
 
-            // Pilih Periode Gadai
+            // Pilih Periode Gadai (Manual input)
             const Text(
-              'Pilih Periode Gadai',
+              'Tenor / Jangka Waktu (Hari)',
               style: TextStyle(
                 color: AppColors.textDark,
                 fontSize: 14,
@@ -173,8 +178,9 @@ class Step2FinanceView extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 8),
-            DropdownButtonFormField<String>(
-              value: selectedPeriod,
+            TextFormField(
+              controller: periodController,
+              keyboardType: TextInputType.number,
               decoration: InputDecoration(
                 filled: true,
                 fillColor: const Color(0xFFEFF6FF),
@@ -183,14 +189,64 @@ class Step2FinanceView extends StatelessWidget {
                   borderRadius: BorderRadius.circular(12),
                   borderSide: BorderSide.none,
                 ),
+                suffixText: 'Hari',
+                suffixStyle: const TextStyle(
+                  color: AppColors.textDark,
+                  fontWeight: FontWeight.bold,
+                ),
               ),
-              items: periods.map((period) {
-                return DropdownMenuItem(
-                  value: period,
-                  child: Text(period, style: const TextStyle(fontSize: 15)),
-                );
-              }).toList(),
-              onChanged: onPeriodChanged,
+              style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
+              onChanged: (val) {
+                onAmountChanged();
+              },
+              validator: (value) {
+                if (value == null || value.isEmpty) {
+                  return 'Jangka waktu tidak boleh kosong';
+                }
+                final days = int.tryParse(value);
+                if (days == null || days <= 0) {
+                  return 'Jangka waktu tidak valid';
+                }
+                return null;
+              },
+            ),
+            const SizedBox(height: 24),
+
+            // Pilihan Biaya Administrasi
+            const Text(
+              'Biaya Administrasi (Rp 10.000)',
+              style: TextStyle(
+                color: AppColors.textDark,
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                Expanded(
+                  child: RadioListTile<String>(
+                    title: const Text('Potong Pinjaman', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+                    value: 'Potong Pinjaman',
+                    groupValue: adminFeePaymentMethod,
+                    onChanged: onAdminFeePaymentMethodChanged,
+                    contentPadding: EdgeInsets.zero,
+                    dense: true,
+                    activeColor: AppColors.primary,
+                  ),
+                ),
+                Expanded(
+                  child: RadioListTile<String>(
+                    title: const Text('Bayar Tunai', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+                    value: 'Bayar Tunai',
+                    groupValue: adminFeePaymentMethod,
+                    onChanged: onAdminFeePaymentMethodChanged,
+                    contentPadding: EdgeInsets.zero,
+                    dense: true,
+                    activeColor: AppColors.primary,
+                  ),
+                ),
+              ],
             ),
             const SizedBox(height: 24),
 
@@ -290,7 +346,7 @@ class Step2FinanceView extends StatelessWidget {
                         ),
                         const SizedBox(height: 4),
                         Text(
-                          'Rp ${_formatCurrency(pawnAmt)}',
+                          'Rp ${_formatCurrency(moneyReceived)}',
                           style: const TextStyle(
                             color: Color(0xFF047857),
                             fontSize: 18,
@@ -298,9 +354,11 @@ class Step2FinanceView extends StatelessWidget {
                           ),
                         ),
                         const SizedBox(height: 2),
-                        const Text(
-                          'Diterima penuh tanpa potongan',
-                          style: TextStyle(
+                        Text(
+                          adminFeePaymentMethod == 'Potong Pinjaman'
+                              ? 'Dipotong biaya admin Rp 10.000'
+                              : 'Diterima penuh, admin Rp 10.000 dibayar tunai',
+                          style: const TextStyle(
                             color: Color(0xFF065F46),
                             fontSize: 12,
                           ),

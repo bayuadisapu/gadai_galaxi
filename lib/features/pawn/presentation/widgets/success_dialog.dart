@@ -68,6 +68,33 @@ void showSuccessDialog({
               SizedBox(
                 width: double.infinity,
                 height: 48,
+                child: OutlinedButton.icon(
+                  onPressed: () {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('Mengirim kuitansi digital via WhatsApp...'),
+                        backgroundColor: Colors.green,
+                        behavior: SnackBarBehavior.floating,
+                      ),
+                    );
+                  },
+                  icon: const Icon(Icons.chat_bubble_outline_rounded, color: Color(0xFF10B981)),
+                  label: const Text(
+                    'Kirim Kuitansi WhatsApp',
+                    style: TextStyle(color: Color(0xFF10B981), fontWeight: FontWeight.bold),
+                  ),
+                  style: OutlinedButton.styleFrom(
+                    side: const BorderSide(color: Color(0xFF10B981), width: 1.5),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 12),
+              SizedBox(
+                width: double.infinity,
+                height: 48,
                 child: ElevatedButton(
                   onPressed: () {
                     Navigator.pop(context); // Close Dialog

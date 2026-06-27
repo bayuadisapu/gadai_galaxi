@@ -5,7 +5,8 @@ import '../pages/nasabah_transaksi_detail_page.dart';
 
 class NasabahRiwayatTab extends StatefulWidget {
   final Customer customer;
-  const NasabahRiwayatTab({super.key, required this.customer});
+  final List<PawnTransaction> transactions;
+  const NasabahRiwayatTab({super.key, required this.customer, required this.transactions});
 
   @override
   State<NasabahRiwayatTab> createState() => _NasabahRiwayatTabState();
@@ -31,7 +32,7 @@ class _NasabahRiwayatTabState extends State<NasabahRiwayatTab> {
 
   @override
   Widget build(BuildContext context) {
-    final myTxs = mockTransactions.where((tx) => tx.customerId == widget.customer.id).toList();
+    final myTxs = widget.transactions.where((tx) => tx.customerId == widget.customer.id).toList();
     final filtered = _filter == 'Semua' ? myTxs : myTxs.where((tx) => tx.status == _filter).toList();
 
     return Column(

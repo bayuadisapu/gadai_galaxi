@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:galaxi_gadai/core/constants/app_colors.dart';
 import 'package:galaxi_gadai/core/data/mock_data.dart';
+import 'package:galaxi_gadai/core/services/supabase_gadai_service.dart';
 
 class ExtensionPage extends StatefulWidget {
   final String? prefilledTxId;
@@ -16,42 +17,48 @@ class _ExtensionPageState extends State<ExtensionPage> {
   String? _selectedTxId;
   String _selectedExtensionPeriod = '15 Hari';
   bool _isPaymentConfirmed = false;
+  final _svc = SupabaseGadaiService.instance;
+  List<PawnTransaction> _allTxs = [];
+  List<Customer> _allCustomers = [];
+  bool _isLoading = true;
 
   @override
   void initState() {
     super.initState();
-    if (widget.prefilledTxId != null) {
-      _selectedTxId = widget.prefilledTxId;
-    } else {
-      // Prefill with first active/macet tx if available
-      final activeTxs = mockTransactions.where((tx) => tx.status != 'Lunas').toList();
-      if (activeTxs.isNotEmpty) {
-        _selectedTxId = activeTxs.first.id;
+    _loadData();
+  }
+
+  Future<void> _loadData() async {
+    setState(() => _isLoading = true);
+    try {
+      final txs = await _svc.fetchTransactions();
+      final customers = await _svc.fetchNasabah();
+      if (!mounted) return;
+      setState(() { _allTxs = txs; _allCustomers = customers; _isLoading = false; });
+      if (widget.prefilledTxId != null) {
+        _selectedTxId = widget.prefilledTxId;
+      } else {
+        final activeTxs = _allTxs.where((tx) => tx.status != 'Lunas').toList();
+        if (activeTxs.isNotEmpty) _selectedTxId = activeTxs.first.id;
       }
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _isLoading = false);
     }
   }
 
-  // Get list of active/macet transactions for dropdown
   List<PawnTransaction> _getActiveTransactions() {
-    return mockTransactions.where((tx) => tx.status != 'Lunas').toList();
+    return _allTxs.where((tx) => tx.status != 'Lunas').toList();
   }
 
   PawnTransaction? _getSelectedTransaction() {
     if (_selectedTxId == null) return null;
-    try {
-      return mockTransactions.firstWhere((tx) => tx.id == _selectedTxId);
-    } catch (_) {
-      return null;
-    }
+    try { return _allTxs.firstWhere((tx) => tx.id == _selectedTxId); } catch (_) { return null; }
   }
 
   Customer? _getCustomerForTx(PawnTransaction? tx) {
     if (tx == null) return null;
-    try {
-      return mockCustomers.firstWhere((c) => c.id == tx.customerId);
-    } catch (_) {
-      return null;
-    }
+    try { return _allCustomers.firstWhere((c) => c.id == tx.customerId); } catch (_) { return null; }
   }
 
   String _formatCurrency(int val) {
@@ -74,31 +81,35 @@ class _ExtensionPageState extends State<ExtensionPage> {
     return '${date.day.toString().padLeft(2, '0')} ${months[date.month - 1]} ${date.year}';
   }
 
-  void _processExtension(PawnTransaction tx) {
+  void _processExtension(PawnTransaction tx) async {
     final days = _selectedExtensionPeriod == '15 Hari' ? 15 : 30;
     final oldDueDate = tx.dateDue;
     final jatipDibayar = tx.totalFee;
+    final newDueDate = oldDueDate.add(Duration(days: days));
+    final newTotalFee = tx.dailyFee * days;
+    final newTotalRepayment = tx.principal + newTotalFee;
 
-    setState(() {
-      // Catat ke riwayat perpanjangan
-      mockExtensionHistory.add(ExtensionHistory(
-        id: 'EXT${DateTime.now().millisecondsSinceEpoch}',
-        transactionId: tx.id,
-        jatipDibayar: jatipDibayar,
-        tglPerpanjangan: DateTime.now(),
-        tglTempoLama: oldDueDate,
-        tglTempoBaru: oldDueDate.add(Duration(days: days)),
-      ));
-      // Apply business rollover logic
-      tx.dateDue = oldDueDate.add(Duration(days: days));
-      tx.status = 'Aktif';
-      tx.dateApplied = DateTime.now();
-      tx.periodDays = days;
-      tx.totalFee = tx.dailyFee * days;
-      tx.totalRepayment = tx.principal + tx.totalFee;
-    });
+    try {
+      await _svc.createExtension(
+        ExtensionHistory(id: '', transactionId: tx.id, jatipDibayar: jatipDibayar, tglPerpanjangan: DateTime.now(), tglTempoLama: oldDueDate, tglTempoBaru: newDueDate),
+      );
+      await _svc.updateTransactionStatus(tx.id, 'Aktif', newDueDate: newDueDate, periodDays: days, totalFee: newTotalFee, totalRepayment: newTotalRepayment);
 
-    _showSuccessDialog(tx, days);
+      setState(() {
+        tx.dateDue = newDueDate;
+        tx.status = 'Aktif';
+        tx.dateApplied = DateTime.now();
+        tx.periodDays = days;
+        tx.totalFee = newTotalFee;
+        tx.totalRepayment = newTotalRepayment;
+      });
+
+      if (!mounted) return;
+      _showSuccessDialog(tx, days);
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e'), backgroundColor: const Color(0xFFEF4444)));
+    }
   }
 
   void _showSuccessDialog(PawnTransaction tx, int days) {

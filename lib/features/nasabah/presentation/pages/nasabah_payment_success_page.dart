@@ -7,6 +7,7 @@ class NasabahPaymentSuccessPage extends StatefulWidget {
   final int jatipDibayar;
   final DateTime newDueDate;
   final String paymentMethod;
+  final bool isRedemption;
 
   const NasabahPaymentSuccessPage({
     super.key,
@@ -14,6 +15,7 @@ class NasabahPaymentSuccessPage extends StatefulWidget {
     required this.jatipDibayar,
     required this.newDueDate,
     required this.paymentMethod,
+    this.isRedemption = false,
   });
 
   @override
@@ -58,11 +60,12 @@ class _NasabahPaymentSuccessPageState extends State<NasabahPaymentSuccessPage>
 
   @override
   Widget build(BuildContext context) {
+    final isRedeem = widget.isRedemption;
     return PopScope(
       canPop: false,
       onPopInvokedWithResult: (didPop, result) {
         if (!didPop) {
-          Navigator.pop(context); // back to detail page
+          Navigator.pop(context);
         }
       },
       child: Scaffold(
@@ -73,11 +76,11 @@ class _NasabahPaymentSuccessPageState extends State<NasabahPaymentSuccessPage>
           scrolledUnderElevation: 0,
           leading: IconButton(
             icon: const Icon(Icons.arrow_back_rounded, color: AppColors.primary),
-            onPressed: () => Navigator.pop(context), // kembali ke detail transaksi
+            onPressed: () => Navigator.pop(context),
           ),
-          title: const Text(
-            'Pembayaran Berhasil',
-            style: TextStyle(color: AppColors.primary, fontWeight: FontWeight.bold, fontSize: 17),
+          title: Text(
+            isRedeem ? 'Tebusan Berhasil' : 'Pembayaran Berhasil',
+            style: const TextStyle(color: AppColors.primary, fontWeight: FontWeight.bold, fontSize: 17),
           ),
         ),
         body: SafeArea(
@@ -107,22 +110,54 @@ class _NasabahPaymentSuccessPageState extends State<NasabahPaymentSuccessPage>
                           ),
                         ],
                       ),
-                      child: const Icon(Icons.check_circle_rounded, color: Color(0xFF10B981), size: 58),
+                      child: Icon(
+                        isRedeem ? Icons.redeem_rounded : Icons.check_circle_rounded,
+                        color: const Color(0xFF10B981),
+                        size: 58,
+                      ),
                     ),
                   ),
                   const SizedBox(height: 28),
 
-                  const Text(
-                    'Pembayaran Berhasil!',
-                    style: TextStyle(color: AppColors.textDark, fontSize: 22, fontWeight: FontWeight.bold),
+                  Text(
+                    isRedeem ? 'Tebusan Berhasil!' : 'Pembayaran Berhasil!',
+                    style: const TextStyle(color: AppColors.textDark, fontSize: 22, fontWeight: FontWeight.bold),
                     textAlign: TextAlign.center,
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    'Tenor gadai Anda berhasil diperpanjang secara otomatis',
+                    isRedeem
+                        ? 'Barang jaminan Anda siap diambil di cabang'
+                        : 'Tenor gadai Anda berhasil diperpanjang secara otomatis',
                     style: TextStyle(color: Colors.grey.shade500, fontSize: 14),
                     textAlign: TextAlign.center,
                   ),
+
+                  // Pickup notice for redemption
+                  if (isRedeem) ...[
+                    const SizedBox(height: 16),
+                    Container(
+                      padding: const EdgeInsets.all(14),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFECFDF5),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: const Color(0xFFA7F3D0)),
+                      ),
+                      child: const Row(
+                        children: [
+                          Icon(Icons.store_outlined, color: Color(0xFF059669), size: 20),
+                          SizedBox(width: 10),
+                          Expanded(
+                            child: Text(
+                              'Silakan datang ke cabang dengan membawa bukti pembayaran ini untuk mengambil barang jaminan Anda.',
+                              style: TextStyle(color: Color(0xFF065F46), fontSize: 12, height: 1.4),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+
                   const SizedBox(height: 32),
 
                   // Receipt Card
@@ -139,16 +174,19 @@ class _NasabahPaymentSuccessPageState extends State<NasabahPaymentSuccessPage>
                         Container(
                           width: double.infinity,
                           padding: const EdgeInsets.all(16),
-                          decoration: const BoxDecoration(
-                            color: Color(0xFF003F88),
-                            borderRadius: BorderRadius.only(
+                          decoration: BoxDecoration(
+                            color: isRedeem ? const Color(0xFF065F46) : const Color(0xFF003F88),
+                            borderRadius: const BorderRadius.only(
                               topLeft: Radius.circular(20),
                               topRight: Radius.circular(20),
                             ),
                           ),
                           child: Column(
                             children: [
-                              const Text('Bukti Pembayaran', style: TextStyle(color: Colors.white70, fontSize: 12)),
+                              Text(
+                                isRedeem ? 'Bukti Tebusan' : 'Bukti Pembayaran',
+                                style: const TextStyle(color: Colors.white70, fontSize: 12),
+                              ),
                               const SizedBox(height: 4),
                               Text(
                                 'Rp ${_formatCurrency(widget.jatipDibayar)}',
@@ -173,31 +211,37 @@ class _NasabahPaymentSuccessPageState extends State<NasabahPaymentSuccessPage>
                               const SizedBox(height: 12),
                               const Divider(color: Color(0xFFE2E8F0)),
                               const SizedBox(height: 12),
-                              _receiptRow('Tenor Diperpanjang', '${widget.transaction.periodDays} Hari'),
-                              const SizedBox(height: 12),
-                              Row(
-                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                children: [
-                                  const Text('Jatuh Tempo Baru', style: TextStyle(color: AppColors.textMuted, fontSize: 13)),
-                                  Text(
-                                    _formatDate(widget.newDueDate),
-                                    style: const TextStyle(color: AppColors.primary, fontSize: 14, fontWeight: FontWeight.bold),
-                                  ),
-                                ],
-                              ),
-                              const SizedBox(height: 12),
-                              const Divider(color: Color(0xFFE2E8F0)),
-                              const SizedBox(height: 12),
-                              Row(
-                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                children: [
-                                  const Text('Total Tebusan Berikutnya', style: TextStyle(color: AppColors.textMuted, fontSize: 13)),
-                                  Text(
-                                    'Rp ${_formatCurrency(widget.transaction.totalRepayment)}',
-                                    style: const TextStyle(color: AppColors.textDark, fontSize: 13, fontWeight: FontWeight.bold),
-                                  ),
-                                ],
-                              ),
+                              if (isRedeem) ...[
+                                _receiptRow('Status', 'LUNAS ✅'),
+                                const SizedBox(height: 12),
+                                _receiptRow('Tanggal Pelunasan', _formatDate(DateTime.now())),
+                              ] else ...[
+                                _receiptRow('Tenor Diperpanjang', '${widget.transaction.periodDays} Hari'),
+                                const SizedBox(height: 12),
+                                Row(
+                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                  children: [
+                                    const Text('Jatuh Tempo Baru', style: TextStyle(color: AppColors.textMuted, fontSize: 13)),
+                                    Text(
+                                      _formatDate(widget.newDueDate),
+                                      style: const TextStyle(color: AppColors.primary, fontSize: 14, fontWeight: FontWeight.bold),
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 12),
+                                const Divider(color: Color(0xFFE2E8F0)),
+                                const SizedBox(height: 12),
+                                Row(
+                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                  children: [
+                                    const Text('Total Tebusan Berikutnya', style: TextStyle(color: AppColors.textMuted, fontSize: 13)),
+                                    Text(
+                                      'Rp ${_formatCurrency(widget.transaction.totalRepayment)}',
+                                      style: const TextStyle(color: AppColors.textDark, fontSize: 13, fontWeight: FontWeight.bold),
+                                    ),
+                                  ],
+                                ),
+                              ],
                             ],
                           ),
                         ),
@@ -248,7 +292,7 @@ class _NasabahPaymentSuccessPageState extends State<NasabahPaymentSuccessPage>
                   ),
                   const SizedBox(height: 12),
                   TextButton(
-                    onPressed: () => Navigator.pop(context), // kembali ke detail transaksi
+                    onPressed: () => Navigator.pop(context),
                     child: const Text('Lihat Detail Transaksi', style: TextStyle(color: AppColors.primary, fontWeight: FontWeight.w600)),
                   ),
                 ],
