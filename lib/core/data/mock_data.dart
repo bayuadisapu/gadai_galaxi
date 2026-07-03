@@ -47,6 +47,7 @@ class Customer {
 // ── Model: PawnTransaction ──
 class PawnTransaction {
   final String id;
+  final String transactionCode; // Format: GDI-2026-0001
   final String customerId;
   final String cabangId;
   final String collateralType;
@@ -64,6 +65,7 @@ class PawnTransaction {
 
   PawnTransaction({
     required this.id,
+    this.transactionCode = '',
     required this.customerId,
     this.cabangId = '',
     required this.collateralType,
@@ -79,6 +81,11 @@ class PawnTransaction {
     required this.dateDue,
     required this.status,
   });
+
+  /// Nomor transaksi yang ditampilkan ke user.
+  /// Gunakan transactionCode jika ada, fallback ke 8 karakter pertama UUID.
+  String get displayCode =>
+      transactionCode.isNotEmpty ? transactionCode : 'GDI-${id.substring(0, 8).toUpperCase()}';
 
   void extendTenor(int additionalDays) {
     dateDue = dateDue.add(Duration(days: additionalDays));

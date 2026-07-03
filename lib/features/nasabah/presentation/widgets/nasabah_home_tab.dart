@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:galaxi_gadai/core/constants/app_colors.dart';
 import 'package:galaxi_gadai/core/data/mock_data.dart';
 import '../pages/nasabah_transaksi_detail_page.dart';
-import '../pages/nasabah_payment_page.dart';
 
 class NasabahHomeTab extends StatelessWidget {
   final Customer customer;

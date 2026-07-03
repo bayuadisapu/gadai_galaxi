@@ -164,7 +164,7 @@ class _BranchDashboardPageState extends State<BranchDashboardPage> {
       case 2:
         return CustomerSearchPage(isTab: true, branchId: widget.cabangId);
       case 3:
-        return const LaporanTabContent();
+        return LaporanTabContent(branchId: widget.cabangId);
       default:
         return HomeTabContent(
           transactions: _txs,

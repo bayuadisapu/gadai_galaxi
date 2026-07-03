@@ -18,10 +18,12 @@ class TransaksiDetailPage extends StatefulWidget {
 class _TransaksiDetailPageState extends State<TransaksiDetailPage> {
   Customer? _customer;
   List<ExtensionHistory> _extensions = [];
+  late PawnTransaction _tx;
 
   @override
   void initState() {
     super.initState();
+    _tx = widget.transaction;
     _loadRelatedData();
   }
 
@@ -147,7 +149,7 @@ class _TransaksiDetailPageState extends State<TransaksiDetailPage> {
 
   // ── EDIT DATA & NILAI GADAI ──
   void _showEditSheet() {
-    final tx = widget.transaction;
+    final tx = _tx; // gunakan _tx yang sudah refreshed, bukan widget.transaction
 
     String fmtNum(int v) {
       final s = v.toString();
@@ -292,6 +294,9 @@ class _TransaksiDetailPageState extends State<TransaksiDetailPage> {
                         totalRepayment: newPrincipal + newTotalFee,
                         dateDue: newDue,
                       );
+                      // Reload data dari Supabase agar UI update
+                      final refreshed = await SupabaseGadaiService.instance.fetchTransactionById(tx.id);
+                      if (refreshed != null && mounted) setState(() => _tx = refreshed);
                     } catch (_) {}
                     Navigator.pop(ctx);
                     setState(() {});
@@ -323,7 +328,7 @@ class _TransaksiDetailPageState extends State<TransaksiDetailPage> {
 
   @override
   Widget build(BuildContext context) {
-    final tx = widget.transaction;
+    final tx = _tx; // gunakan mutable local state agar update setelah edit
     final today = DateTime.now();
     final daysLeft = tx.dateDue.difference(today).inDays;
     final isOverdue = daysLeft < 0;
@@ -357,7 +362,7 @@ class _TransaksiDetailPageState extends State<TransaksiDetailPage> {
           icon: const Icon(Icons.arrow_back_rounded, color: AppColors.primary),
           onPressed: () => Navigator.pop(context),
         ),
-        title: Text(tx.id,
+        title: Text(tx.displayCode,
             style: const TextStyle(color: AppColors.primary, fontWeight: FontWeight.bold, fontSize: 16)),
         actions: [
           if (isActive)

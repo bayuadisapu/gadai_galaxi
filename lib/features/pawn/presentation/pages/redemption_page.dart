@@ -47,7 +47,8 @@ class _RedemptionPageState extends State<RedemptionPage> {
   }
 
   List<PawnTransaction> _getActiveTransactions() {
-    return _allTxs.where((tx) => tx.status != 'Lunas').toList();
+    // Hanya tampilkan transaksi yang masih bisa ditebus
+    return _allTxs.where((tx) => tx.status == 'Aktif' || tx.status == 'Macet').toList();
   }
 
   PawnTransaction? _getSelectedTransaction() {
@@ -80,13 +81,21 @@ class _RedemptionPageState extends State<RedemptionPage> {
     return '${date.day.toString().padLeft(2, '0')} ${months[date.month - 1]} ${date.year}';
   }
 
-  void _processRedemption(PawnTransaction tx) {
-    setState(() {
-      // Apply business redemption logic:
-      // 1. Set status to Lunas
-      tx.status = 'Lunas';
-    });
+  void _processRedemption(PawnTransaction tx) async {
+    try {
+      // Simpan ke Supabase terlebih dahulu
+      await _svc.updateTransactionStatus(tx.id, 'Lunas');
+      tx.redeem(); // update local state
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Gagal proses tebus: $e'), backgroundColor: const Color(0xFFEF4444)),
+      );
+      return;
+    }
 
+    if (!mounted) return;
+    setState(() {});
     _showSuccessDialog(tx);
   }
 
@@ -126,7 +135,7 @@ class _RedemptionPageState extends State<RedemptionPage> {
                 ),
                 const SizedBox(height: 10),
                 Text(
-                  'Pembayaran tebusan sebesar Rp ${_formatCurrency(tx.principal + tx.totalFee)} untuk transaksi ${tx.id} telah lunas.\n\nSilakan serahkan barang jaminan (${tx.brand} ${tx.model}) kembali kepada nasabah.',
+                  'Pembayaran tebusan sebesar Rp ${_formatCurrency(tx.principal + tx.totalFee)} untuk transaksi ${tx.displayCode} telah lunas.\n\nSilakan serahkan barang jaminan (${tx.brand} ${tx.model}) kembali kepada nasabah.',
                   textAlign: TextAlign.center,
                   style: const TextStyle(
                     color: AppColors.textMuted,
@@ -201,7 +210,9 @@ class _RedemptionPageState extends State<RedemptionPage> {
           ),
         ),
       ),
-      body: activeTxs.isEmpty
+      body: _isLoading
+          ? const Center(child: CircularProgressIndicator())
+          : activeTxs.isEmpty
           ? const Center(
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
@@ -247,7 +258,7 @@ class _RedemptionPageState extends State<RedemptionPage> {
                       items: activeTxs.map((tx) {
                         return DropdownMenuItem(
                           value: tx.id,
-                          child: Text('${tx.id} - ${tx.brand} ${tx.model}'),
+                          child: Text('${tx.displayCode} - ${tx.brand} ${tx.model}'),
                         );
                       }).toList(),
                       onChanged: (val) {

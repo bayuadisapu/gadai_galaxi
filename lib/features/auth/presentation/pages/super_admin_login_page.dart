@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:galaxi_gadai/core/constants/app_colors.dart';
+import 'package:galaxi_gadai/core/services/supabase_gadai_service.dart';
 import 'package:galaxi_gadai/features/super_admin/presentation/pages/super_admin_dashboard_page.dart';
 
 class SuperAdminLoginPage extends StatefulWidget {
@@ -15,6 +16,9 @@ class _SuperAdminLoginPageState extends State<SuperAdminLoginPage> {
   final _passwordController = TextEditingController();
   bool _obscurePassword = true;
   bool _isLoading = false;
+  String? _errorMessage;
+
+  final _svc = SupabaseGadaiService.instance;
 
   @override
   void dispose() {
@@ -24,16 +28,43 @@ class _SuperAdminLoginPageState extends State<SuperAdminLoginPage> {
   }
 
   void _handleLogin() async {
+    setState(() => _errorMessage = null);
     if (!_formKey.currentState!.validate()) return;
     setState(() => _isLoading = true);
-    await Future.delayed(const Duration(milliseconds: 800));
-    if (!mounted) return;
-    setState(() => _isLoading = false);
 
-    Navigator.pushReplacement(
-      context,
-      MaterialPageRoute(builder: (_) => const SuperAdminDashboardPage()),
-    );
+    try {
+      final account = await _svc.loginStaff(
+        _emailController.text.trim(),
+        _passwordController.text,
+      );
+
+      if (!mounted) return;
+      setState(() => _isLoading = false);
+
+      if (account == null) {
+        setState(() => _errorMessage = 'Email atau kata sandi salah');
+        return;
+      }
+
+      if (account['role'] != 'super_admin') {
+        // Bukan super admin — logout dan tampilkan error
+        await _svc.signOut();
+        if (!mounted) return;
+        setState(() => _errorMessage = 'Akun ini tidak memiliki akses Super Admin');
+        return;
+      }
+
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (_) => const SuperAdminDashboardPage()),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _isLoading = false;
+        _errorMessage = 'Terjadi kesalahan: ${e.toString()}';
+      });
+    }
   }
 
   @override
@@ -113,7 +144,7 @@ class _SuperAdminLoginPageState extends State<SuperAdminLoginPage> {
                               // Security warning banner
                               Container(
                                 padding: const EdgeInsets.all(12),
-                                margin: const EdgeInsets.only(bottom: 24),
+                                margin: const EdgeInsets.only(bottom: 20),
                                 decoration: BoxDecoration(
                                   color: const Color(0xFFFEF2F2),
                                   borderRadius: BorderRadius.circular(10),
@@ -133,6 +164,27 @@ class _SuperAdminLoginPageState extends State<SuperAdminLoginPage> {
                                 ),
                               ),
 
+                              // Error message
+                              if (_errorMessage != null) ...[
+                                Container(
+                                  width: double.infinity,
+                                  padding: const EdgeInsets.all(12),
+                                  margin: const EdgeInsets.only(bottom: 16),
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFFFEF2F2),
+                                    borderRadius: BorderRadius.circular(10),
+                                    border: Border.all(color: const Color(0xFFFCA5A5)),
+                                  ),
+                                  child: Row(
+                                    children: [
+                                      const Icon(Icons.error_outline_rounded, color: Color(0xFFEF4444), size: 18),
+                                      const SizedBox(width: 8),
+                                      Expanded(child: Text(_errorMessage!, style: const TextStyle(color: Color(0xFFEF4444), fontSize: 13))),
+                                    ],
+                                  ),
+                                ),
+                              ],
+
                               _buildLabel('Email Super Admin'),
                               const SizedBox(height: 8),
                               TextFormField(
@@ -141,6 +193,7 @@ class _SuperAdminLoginPageState extends State<SuperAdminLoginPage> {
                                 decoration: _inputDecoration('superadmin@galaxi.id', Icons.alternate_email_rounded),
                                 style: const TextStyle(color: AppColors.textDark, fontSize: 15),
                                 validator: (v) => v == null || v.trim().isEmpty ? 'Email tidak boleh kosong' : null,
+                                onChanged: (_) => setState(() => _errorMessage = null),
                               ),
                               const SizedBox(height: 20),
                               _buildLabel('Kata Sandi'),
@@ -156,6 +209,7 @@ class _SuperAdminLoginPageState extends State<SuperAdminLoginPage> {
                                 ),
                                 style: const TextStyle(color: AppColors.textDark, fontSize: 15),
                                 validator: (v) => v == null || v.isEmpty ? 'Kata sandi tidak boleh kosong' : null,
+                                onChanged: (_) => setState(() => _errorMessage = null),
                               ),
                               const SizedBox(height: 32),
                               SizedBox(
@@ -173,27 +227,7 @@ class _SuperAdminLoginPageState extends State<SuperAdminLoginPage> {
                                       : const Text('Verifikasi & Masuk', style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w600)),
                                 ),
                               ),
-                              const SizedBox(height: 20),
-                              Container(
-                                padding: const EdgeInsets.all(12),
-                                decoration: BoxDecoration(
-                                  color: const Color(0xFFFFF7ED),
-                                  borderRadius: BorderRadius.circular(10),
-                                  border: Border.all(color: const Color(0xFFFED7AA)),
-                                ),
-                                child: const Row(
-                                  children: [
-                                    Icon(Icons.info_outline_rounded, color: Color(0xFFF97316), size: 16),
-                                    SizedBox(width: 8),
-                                    Expanded(
-                                      child: Text(
-                                        'Demo: Tekan "Verifikasi & Masuk" untuk masuk sebagai Super Admin.',
-                                        style: TextStyle(color: Color(0xFFC2410C), fontSize: 12),
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
+                              const SizedBox(height: 8),
                             ],
                           ),
                         ),

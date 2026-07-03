@@ -277,7 +277,9 @@ class _CustomerSearchPageState extends State<CustomerSearchPage> {
 
           // 3. Customer List
           Expanded(
-            child: filteredCustomers.isEmpty
+            child: _isLoading
+                ? const Center(child: CircularProgressIndicator())
+                : filteredCustomers.isEmpty
                 ? const Center(
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,

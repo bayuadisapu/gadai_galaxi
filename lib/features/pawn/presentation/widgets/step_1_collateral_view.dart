@@ -1,7 +1,10 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:galaxi_gadai/core/constants/app_colors.dart';
 import 'package:galaxi_gadai/core/services/gemini_taksiran_service.dart';
+import 'package:galaxi_gadai/core/services/gold_price_service.dart';
+import 'package:image_picker/image_picker.dart';
 import 'new_pawn_shared_widgets.dart';
 
 class Step1CollateralView extends StatefulWidget {
@@ -128,6 +131,111 @@ class _Step1CollateralViewState extends State<Step1CollateralView> {
   String? _aiMaxPrice;
   String? _aiRecPawn;
   String? _aiNote;
+
+  // ── Harga Emas Live ──
+  int _goldPricePerGram = 1_620_000;
+  bool _goldPriceLoading = false;
+  bool _goldPriceIsLive = false;
+  String _goldPriceLabel = 'Memuat...';
+
+  // ── Foto Barang ──
+  XFile? _barangPhoto;
+  bool _isPickingBarangPhoto = false;
+
+  @override
+  void initState() {
+    super.initState();
+    // Fetch harga emas jika tampilan awal adalah Emas
+    if (widget.selectedCollateral == 'Emas') {
+      _fetchGoldPrice();
+    }
+  }
+
+  Future<void> _fetchGoldPrice() async {
+    if (_goldPriceLoading) return;
+    setState(() => _goldPriceLoading = true);
+    try {
+      final result = await GoldPriceService.fetchGoldPrice();
+      if (mounted) {
+        setState(() {
+          _goldPricePerGram = result.pricePerGram;
+          _goldPriceIsLive = result.isLive;
+          _goldPriceLabel = result.lastUpdatedLabel;
+          _goldPriceLoading = false;
+        });
+      }
+    } catch (_) {
+      if (mounted) setState(() => _goldPriceLoading = false);
+    }
+  }
+
+  @override
+  void didUpdateWidget(covariant Step1CollateralView oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.selectedCollateral == 'Emas' &&
+        oldWidget.selectedCollateral != 'Emas') {
+      _fetchGoldPrice();
+    }
+  }
+
+  /// Buka bottom sheet pilih Camera / Galeri untuk foto barang
+  Future<void> _pickBarangPhoto() async {
+    if (_isPickingBarangPhoto) return;
+    final ImageSource? source = await showModalBottomSheet<ImageSource>(
+      context: context,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) => Padding(
+        padding: const EdgeInsets.symmetric(vertical: 12),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(width: 40, height: 4, decoration: BoxDecoration(color: Colors.grey.shade300, borderRadius: BorderRadius.circular(2))),
+            const SizedBox(height: 16),
+            const Text('Unggah Foto Barang', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+            const SizedBox(height: 8),
+            ListTile(
+              leading: const CircleAvatar(backgroundColor: Color(0xFFEFF6FF), child: Icon(Icons.camera_alt_rounded, color: AppColors.primary)),
+              title: const Text('Ambil Foto dari Kamera'),
+              onTap: () => Navigator.pop(ctx, ImageSource.camera),
+            ),
+            ListTile(
+              leading: const CircleAvatar(backgroundColor: Color(0xFFEFF6FF), child: Icon(Icons.photo_library_rounded, color: AppColors.primary)),
+              title: const Text('Pilih dari Galeri'),
+              onTap: () => Navigator.pop(ctx, ImageSource.gallery),
+            ),
+            const SizedBox(height: 8),
+          ],
+        ),
+      ),
+    );
+    if (source == null || !mounted) return;
+    setState(() => _isPickingBarangPhoto = true);
+    try {
+      final XFile? picked = await ImagePicker().pickImage(
+        source: source,
+        imageQuality: 80,
+        maxWidth: 1280,
+      );
+      if (!mounted) return;
+      if (picked != null) {
+        setState(() => _barangPhoto = picked);
+        widget.onBarangPhotoUploadedChanged(true);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Foto barang berhasil diambil'),
+            backgroundColor: Colors.green,
+            duration: Duration(seconds: 1),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isPickingBarangPhoto = false);
+    }
+  }
 
   void _runAiTaksiran() async {
     final type = widget.selectedBarangType;
@@ -425,47 +533,63 @@ class _Step1CollateralViewState extends State<Step1CollateralView> {
                 ),
                 const SizedBox(height: 8),
                 GestureDetector(
-                  onTap: () {
-                    widget.onBarangPhotoUploadedChanged(!widget.barangPhotoUploaded);
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text(!widget.barangPhotoUploaded ? 'Foto barang gadai berhasil diunggah' : 'Foto barang gadai dihapus'),
-                        backgroundColor: !widget.barangPhotoUploaded ? Colors.green : Colors.grey,
-                        duration: const Duration(seconds: 1),
-                      ),
-                    );
-                  },
+                  onTap: _isPickingBarangPhoto ? null : _pickBarangPhoto,
                   child: Container(
                     width: double.infinity,
-                    padding: const EdgeInsets.symmetric(vertical: 24),
+                    constraints: const BoxConstraints(minHeight: 110),
                     decoration: BoxDecoration(
                       color: widget.barangPhotoUploaded ? const Color(0xFFECFDF5) : Colors.white,
                       borderRadius: BorderRadius.circular(12),
                       border: Border.all(
                         color: widget.barangPhotoUploaded ? const Color(0xFF10B981) : const Color(0xFFCBD5E1),
                         width: 1.5,
-                        style: BorderStyle.solid,
                       ),
                     ),
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(
-                          widget.barangPhotoUploaded ? Icons.verified_user_rounded : Icons.camera_enhance_outlined,
-                          color: widget.barangPhotoUploaded ? const Color(0xFF10B981) : const Color(0xFF64748B),
-                          size: 36,
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          widget.barangPhotoUploaded ? 'Foto Barang Terunggah (Ketuk untuk ganti)' : 'Unggah Foto Barang Gadai',
-                          style: TextStyle(
-                            color: widget.barangPhotoUploaded ? const Color(0xFF047857) : const Color(0xFF64748B),
-                            fontWeight: FontWeight.bold,
-                            fontSize: 13,
-                          ),
-                        ),
-                      ],
-                    ),
+                    child: _isPickingBarangPhoto
+                        ? const Padding(
+                            padding: EdgeInsets.symmetric(vertical: 24),
+                            child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
+                              CircularProgressIndicator(color: AppColors.primary),
+                              SizedBox(height: 10),
+                              Text('Membuka kamera...', style: TextStyle(color: AppColors.textMuted, fontSize: 13)),
+                            ]),
+                          )
+                        : _barangPhoto != null
+                            ? Stack(
+                                children: [
+                                  ClipRRect(
+                                    borderRadius: BorderRadius.circular(11),
+                                    child: Image.file(
+                                      File(_barangPhoto!.path),
+                                      width: double.infinity,
+                                      height: 180,
+                                      fit: BoxFit.cover,
+                                    ),
+                                  ),
+                                  Positioned(
+                                    top: 8, right: 8,
+                                    child: Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                      decoration: BoxDecoration(color: Colors.black54, borderRadius: BorderRadius.circular(8)),
+                                      child: const Text('Ketuk untuk ganti', style: TextStyle(color: Colors.white, fontSize: 11)),
+                                    ),
+                                  ),
+                                ],
+                              )
+                            : Padding(
+                                padding: const EdgeInsets.symmetric(vertical: 24),
+                                child: Column(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    Icon(Icons.camera_enhance_outlined, color: const Color(0xFF64748B), size: 36),
+                                    const SizedBox(height: 8),
+                                    const Text('Unggah Foto Barang Gadai',
+                                        style: TextStyle(color: Color(0xFF64748B), fontWeight: FontWeight.bold, fontSize: 13)),
+                                    const SizedBox(height: 4),
+                                    const Text('Kamera atau Galeri', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 11)),
+                                  ],
+                                ),
+                              ),
                   ),
                 ),
               ],
@@ -729,14 +853,50 @@ class _Step1CollateralViewState extends State<Step1CollateralView> {
                   ),
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                    decoration: BoxDecoration(color: const Color(0xFFF59E0B), borderRadius: BorderRadius.circular(8)),
-                    child: const Text('LIVE', style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold)),
+                    decoration: BoxDecoration(
+                      color: _goldPriceIsLive ? const Color(0xFFF59E0B) : Colors.grey,
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        if (_goldPriceLoading)
+                          const SizedBox(width: 8, height: 8, child: CircularProgressIndicator(strokeWidth: 1.5, color: Colors.white))
+                        else
+                          Icon(_goldPriceIsLive ? Icons.wifi_rounded : Icons.wifi_off_rounded, size: 10, color: Colors.white),
+                        const SizedBox(width: 3),
+                        Text(_goldPriceIsLive ? 'LIVE' : 'OFFLINE', style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold)),
+                        const SizedBox(width: 3),
+                        GestureDetector(
+                          onTap: _fetchGoldPrice,
+                          child: const Icon(Icons.refresh_rounded, size: 12, color: Colors.white),
+                        ),
+                      ],
+                    ),
                   ),
                 ],
               ),
               const SizedBox(height: 6),
-              const Text('Rp 1.150.000 / gram', style: TextStyle(color: Color(0xFF78350F), fontSize: 22, fontWeight: FontWeight.bold)),
-              const Text('Update: Hari ini 10:00 WIB', style: TextStyle(color: Color(0xFF92400E), fontSize: 11)),
+              // Harga emas live
+              _goldPriceLoading
+                  ? const SizedBox(
+                      height: 28,
+                      child: Row(children: [
+                        SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFFF59E0B))),
+                        SizedBox(width: 8),
+                        Text('Mengambil harga emas...', style: TextStyle(color: Color(0xFF92400E), fontSize: 13)),
+                      ]),
+                    )
+                  : Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Rp ${_formatCurrency(_goldPricePerGram)} / gram',
+                          style: const TextStyle(color: Color(0xFF78350F), fontSize: 22, fontWeight: FontWeight.bold),
+                        ),
+                        Text(_goldPriceLabel, style: const TextStyle(color: Color(0xFF92400E), fontSize: 11)),
+                      ],
+                    ),
               const SizedBox(height: 10),
               const Divider(color: Color(0xFFFFCA28)),
               const SizedBox(height: 4),
@@ -751,7 +911,8 @@ class _Step1CollateralViewState extends State<Step1CollateralView> {
                       '18K': 0.750, '20K': 0.833, '22K': 0.916, '24K': 0.999
                     };
                     final selectedKaratPct = karatPcts[widget.selectedKarat] ?? 0.0;
-                    final taksiran = (gross * 1150000 * selectedKaratPct).toInt();
+                    // Gunakan harga emas live
+                    final taksiran = (gross * _goldPricePerGram * selectedKaratPct).toInt();
                     if (taksiran <= 0) {
                       return const Text('Isi berat & kadar karat', style: TextStyle(color: Color(0xFFF59E0B), fontSize: 12));
                     }

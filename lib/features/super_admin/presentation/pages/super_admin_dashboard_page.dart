@@ -679,7 +679,7 @@ class _SuperAdminDashboardPageState extends State<SuperAdminDashboardPage> {
                   _loadData();
                   messenger.showSnackBar(
                     SnackBar(
-                      content: Text('Akun Admin berhasil ${isEdit ? 'diperbarui' : 'dibuat'} (Mode Demo/Bypass)'),
+                      content: Text('Akun Admin berhasil ${isEdit ? 'diperbarui' : 'dibuat'}'),
                       backgroundColor: const Color(0xFF10B981),
                     ),
                   );

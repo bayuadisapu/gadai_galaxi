@@ -79,7 +79,7 @@ class _NasabahDashboardPageState extends State<NasabahDashboardPage> {
           body = NasabahHomeTab(customer: widget.customer, transactions: _txs, onTabChanged: (i) => setState(() => _currentIndex = i));
           break;
         case 1:
-          body = NasabahRiwayatTab(customer: widget.customer, transactions: _txs);
+          body = NasabahRiwayatTab(customer: widget.customer, transactions: _txs, onRefresh: _loadData);
           break;
         case 2:
           body = const NasabahKalkulatorTab();

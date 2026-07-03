@@ -183,7 +183,12 @@ class _CustomerDetailsSheetState extends State<CustomerDetailsSheet> {
                   ),
                   const SizedBox(height: 12),
 
-                  if (customerTxs.isEmpty)
+                  if (_isLoading)
+                    const Padding(
+                      padding: EdgeInsets.symmetric(vertical: 24),
+                      child: Center(child: CircularProgressIndicator()),
+                    )
+                  else if (customerTxs.isEmpty)
                     Container(
                       width: double.infinity,
                       padding: const EdgeInsets.symmetric(vertical: 32),
@@ -303,7 +308,7 @@ class _CustomerDetailsSheetState extends State<CustomerDetailsSheet> {
             padding: const EdgeInsets.all(14),
             child: Column(
               children: [
-                _buildTxSummaryRow('ID Transaksi', tx.id),
+                _buildTxSummaryRow('No. Kontrak', tx.displayCode),
                 _buildTxSummaryRow('Nominal Pinjaman', 'Rp ${_formatCurrency(tx.principal)}'),
                 _buildTxSummaryRow('Jasa Titip Harian', 'Rp ${_formatCurrency(tx.dailyFee)} / hari'),
                 _buildTxSummaryRow(

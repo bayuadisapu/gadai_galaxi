@@ -1,7 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:galaxi_gadai/core/constants/app_colors.dart';
-import 'package:galaxi_gadai/core/data/mock_data.dart';
+
 import 'package:galaxi_gadai/core/services/supabase_gadai_service.dart';
 import 'package:galaxi_gadai/features/nasabah/presentation/pages/nasabah_dashboard_page.dart';
 import 'register_page.dart';
@@ -36,32 +36,10 @@ class _NasabahLoginPageState extends State<NasabahLoginPage> {
     final phone = _phoneController.text.trim();
     final password = _passwordController.text;
 
-    // Jika input kosong, bypass login demo (seperti versi awal)
-    if (phone.isEmpty && password.isEmpty) {
-      final demoCustomer = Customer(
-        id: 'GN-demo',
-        name: 'Ahmad Fauzi',
-        nik: '3578011204950001',
-        birthPlace: 'Surabaya',
-        birthDate: '12 Apr 1995',
-        gender: 'Laki-laki',
-        phone: '081234567890',
-        address: 'Jl. Dharmahusada Indah No. 12, Surabaya',
-        cabangId: 'jkt',
-      );
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (context) => NasabahDashboardPage(customer: demoCustomer)),
-      );
-      return;
-    }
-
     if (!_formKey.currentState!.validate()) return;
     setState(() => _isLoading = true);
 
     try {
-      final phone = _phoneController.text.trim();
-      final password = _passwordController.text;
       final customer = await _svc.loginNasabah(phone, password);
 
       if (!mounted) return;

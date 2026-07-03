@@ -174,6 +174,16 @@ class SupabaseGadaiService {
     return _customerFromRow(data.first);
   }
 
+  Future<Customer?> fetchNasabahByPhone(String phone) async {
+    try {
+      final data = await _client.from('gadai_nasabah').select().eq('phone', phone.trim()).limit(1);
+      if (data.isEmpty) return null;
+      return _customerFromRow(data.first);
+    } catch (_) {
+      return null;
+    }
+  }
+
   Future<Customer> createNasabah(Customer c) async {
     final row = await _client.from('gadai_nasabah').insert({
       'branch_id': c.cabangId,
@@ -377,13 +387,14 @@ class SupabaseGadaiService {
     if (periodDays != null) updates['period_days'] = periodDays;
     if (totalFee != null) updates['total_fee'] = totalFee;
     if (totalRepayment != null) updates['total_repayment'] = totalRepayment;
-    updates['date_applied'] = DateTime.now().toIso8601String();
+    // Catatan: date_applied TIDAK di-reset di sini — hanya diset saat transaksi dibuat.
 
     await _client.from('gadai_transactions').update(updates).eq('id', txId);
   }
 
   PawnTransaction _txFromRow(Map<String, dynamic> row) => PawnTransaction(
     id: row['id'] as String,
+    transactionCode: row['transaction_code'] as String? ?? '',
     customerId: row['nasabah_id'] as String,
     cabangId: row['branch_id'] as String? ?? '',
     collateralType: row['collateral_type'] as String,
@@ -395,8 +406,12 @@ class SupabaseGadaiService {
     dailyFee: row['daily_fee'] as int? ?? 0,
     totalFee: row['total_fee'] as int? ?? 0,
     totalRepayment: row['total_repayment'] as int? ?? 0,
-    dateApplied: DateTime.parse(row['date_applied'] as String),
-    dateDue: DateTime.parse(row['date_due'] as String),
+    dateApplied: row['date_applied'] != null
+        ? DateTime.tryParse(row['date_applied'] as String) ?? DateTime.now()
+        : DateTime.now(),
+    dateDue: row['date_due'] != null
+        ? DateTime.tryParse(row['date_due'] as String) ?? DateTime.now()
+        : DateTime.now(),
     status: row['status'] as String? ?? 'Aktif',
   );
 

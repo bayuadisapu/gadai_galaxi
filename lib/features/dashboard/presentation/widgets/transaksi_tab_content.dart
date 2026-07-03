@@ -75,7 +75,7 @@ class _TransaksiTabContentState extends State<TransaksiTabContent> {
       );
       final query = _searchQuery.toLowerCase();
       final nameMatch = customer.name.toLowerCase().contains(query);
-      final idMatch = tx.id.toLowerCase().contains(query);
+      final idMatch = tx.id.toLowerCase().contains(query) || tx.displayCode.toLowerCase().contains(query);
       final brandMatch = tx.brand.toLowerCase().contains(query);
       final modelMatch = tx.model.toLowerCase().contains(query);
       final matchesSearch = nameMatch || idMatch || brandMatch || modelMatch;
@@ -222,7 +222,7 @@ class _TransaksiTabContentState extends State<TransaksiTabContent> {
                               padding: const EdgeInsets.all(14),
                               child: Column(
                                 children: [
-                                  _buildTxSummaryRow('ID Transaksi', tx.id),
+                                  _buildTxSummaryRow('No. Kontrak', tx.displayCode),
                                   _buildTxSummaryRow('Nasabah', customer.name),
                                   _buildTxSummaryRow('Nominal Pinjaman', 'Rp ${_formatCurrency(tx.principal)}'),
                                   _buildTxSummaryRow('Jasa Titip Harian', 'Rp ${_formatCurrency(tx.dailyFee)} / hari'),

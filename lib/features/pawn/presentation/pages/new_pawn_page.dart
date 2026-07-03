@@ -257,7 +257,7 @@ class _NewPawnPageState extends State<NewPawnPage> {
           nik: _nikController.text.trim(),
           phone: _phoneController.text.trim(),
           address: _addressController.text.trim(),
-          birthPlace: _birthPlaceController.text.trim().isNotEmpty ? _birthPlaceController.text.trim() : 'Surabaya',
+          birthPlace: _birthPlaceController.text.trim().isNotEmpty ? _birthPlaceController.text.trim() : '-',
           birthDate: birthDateStr,
           gender: _selectedGender ?? 'Laki-laki',
           cabangId: widget.branchId,
@@ -292,7 +292,17 @@ class _NewPawnPageState extends State<NewPawnPage> {
         setState(() => _isLoading = true);
 
         try {
-          final createdCust = await svc.createNasabah(newCust);
+          // Cek apakah nasabah dengan HP yang sama sudah terdaftar
+          Customer? existingCust = await svc.fetchNasabahByPhone(newCust.phone);
+
+          final Customer createdCust;
+          if (existingCust != null) {
+            // Nasabah sudah ada — gunakan data yang existing
+            createdCust = existingCust;
+          } else {
+            // Nasabah baru — buat ke DB
+            createdCust = await svc.createNasabah(newCust);
+          }
 
           final newTx = PawnTransaction(
             id: '',
@@ -314,8 +324,8 @@ class _NewPawnPageState extends State<NewPawnPage> {
 
           final createdTx = await svc.createTransaction(newTx);
 
-          // Record admin fee to Tenant Wallet
-          TenantWallet.topUp(10000, 'Admin Fee Gadai - $txModel ($_adminFeePaymentMethod)');
+          // Record admin fee to Tenant Wallet (Supabase — fire-and-forget)
+          unawaited(svc.walletTopUp(widget.branchId, 10000, 'Admin Fee Gadai - $txModel ($_adminFeePaymentMethod)'));
 
           // Log transaksi baru
           unawaited(svc.logTransaksiCreated(createdCust.id, createdTx.id, '$txBrand $txModel', pawnAmt));

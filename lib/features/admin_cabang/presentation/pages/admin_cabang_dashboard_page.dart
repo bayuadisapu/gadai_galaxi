@@ -320,13 +320,13 @@ class _AdminCabangDashboardPageState extends State<AdminCabangDashboardPage> {
                   const SizedBox(height: 24),
 
                   // Stats Panel list (White text stats)
-                  _buildTopStatRow(Icons.monetization_on_outlined, 'Gadai Hari ini', 'Rp ${_formatCurrency(totalGadaiHariIni == 0 ? 1650000 : totalGadaiHariIni)}'),
+                  _buildTopStatRow(Icons.monetization_on_outlined, 'Gadai Hari ini', 'Rp ${_formatCurrency(totalGadaiHariIni)}'),
                   const SizedBox(height: 12),
-                  _buildTopStatRow(Icons.check_circle_outline_rounded, 'Ditebus Hari ini', 'Rp ${_formatCurrency(totalTebusHariIni == 0 ? 3450000 : totalTebusHariIni)}'),
+                  _buildTopStatRow(Icons.check_circle_outline_rounded, 'Ditebus Hari ini', 'Rp ${_formatCurrency(totalTebusHariIni)}'),
                   const SizedBox(height: 12),
-                  _buildTopStatRow(Icons.people_outline_rounded, 'Total Nasabah', '${totalNasabah == 0 ? 143 : totalNasabah}'),
+                  _buildTopStatRow(Icons.people_outline_rounded, 'Total Nasabah', '$totalNasabah'),
                   const SizedBox(height: 12),
-                  _buildTopStatRow(Icons.gavel_rounded, 'Siap Lelang', '${siapLelang == 0 ? 12 : siapLelang}'),
+                  _buildTopStatRow(Icons.gavel_rounded, 'Siap Lelang', '$siapLelang'),
                   const SizedBox(height: 24),
 
                   // 2. Saldo Tenant Card (Bright Green)
@@ -481,7 +481,7 @@ class _AdminCabangDashboardPageState extends State<AdminCabangDashboardPage> {
                         Navigator.push(context, MaterialPageRoute(
                           builder: (_) => Scaffold(
                             appBar: AppBar(title: const Text('Laporan Cabang'), backgroundColor: const Color(0xFF0F5A47), iconTheme: const IconThemeData(color: Colors.white)),
-                            body: const LaporanTabContent(),
+                            body: LaporanTabContent(branchId: widget.cabangId),
                           ),
                         ));
                       }),

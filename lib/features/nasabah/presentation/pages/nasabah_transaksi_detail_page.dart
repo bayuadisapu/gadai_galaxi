@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:galaxi_gadai/core/constants/app_colors.dart';
 import 'package:galaxi_gadai/core/data/mock_data.dart';
 import 'package:galaxi_gadai/core/services/supabase_gadai_service.dart';
-import 'nasabah_payment_page.dart';
 import 'package:galaxi_gadai/core/config/system_config.dart';
 
 class NasabahTransaksiDetailPage extends StatefulWidget {
@@ -57,7 +56,8 @@ class _NasabahTransaksiDetailPageState extends State<NasabahTransaksiDetailPage>
     final daysLeft = tx.dateDue.difference(today).inDays;
     final isOverdue = daysLeft < 0;
 
-    final int dailyFeeCalc = SystemConfig.calculateDailyFee(tx.principal);
+    // Gunakan dailyFee yang tersimpan di transaksi, bukan hitung ulang dari SystemConfig
+    final int dailyFeeCalc = tx.dailyFee > 0 ? tx.dailyFee : SystemConfig.calculateDailyFee(tx.principal);
 
     Color statusColor = AppColors.primary;
     if (tx.status == 'Macet') statusColor = const Color(0xFFEF4444);
@@ -101,7 +101,7 @@ class _NasabahTransaksiDetailPageState extends State<NasabahTransaksiDetailPage>
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Text(tx.id, style: const TextStyle(color: AppColors.textMuted, fontSize: 12, fontWeight: FontWeight.w500)),
+                      Text(tx.displayCode, style: const TextStyle(color: AppColors.textMuted, fontSize: 12, fontWeight: FontWeight.w500)),
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
                         decoration: BoxDecoration(

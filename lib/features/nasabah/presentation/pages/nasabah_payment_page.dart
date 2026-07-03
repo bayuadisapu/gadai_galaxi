@@ -68,7 +68,11 @@ class _NasabahPaymentPageState extends State<NasabahPaymentPage>
 
   int get _periodDays => _selectedPeriod == '15 Hari' ? 15 : 30;
   int get _jatipDibayar => widget.transaction.totalFee;
-  DateTime get _newDueDate => widget.transaction.dateDue.add(Duration(days: _periodDays));
+  // Jika transaksi macet, hitung dari hari ini bukan dari dateDue yang sudah lewat
+  DateTime get _baseDate => widget.transaction.dateDue.isBefore(DateTime.now())
+      ? DateTime.now()
+      : widget.transaction.dateDue;
+  DateTime get _newDueDate => _baseDate.add(Duration(days: _periodDays));
 
   // Total tebusan untuk mode redeem
   int get _totalRedemption => widget.transaction.principal + widget.transaction.totalFee;
@@ -135,7 +139,7 @@ class _NasabahPaymentPageState extends State<NasabahPaymentPage>
 
         tx.dateDue = newDueDate;
         tx.status = 'Aktif';
-        tx.dateApplied = DateTime.now();
+        // dateApplied TIDAK diubah — tetap tanggal gadai pertama kali
         tx.periodDays = days;
         tx.totalFee = newTotalFee;
         tx.totalRepayment = newTotalRepayment;

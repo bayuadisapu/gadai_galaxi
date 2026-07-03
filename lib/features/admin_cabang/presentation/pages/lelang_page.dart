@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:galaxi_gadai/core/data/mock_data.dart';
 import 'package:galaxi_gadai/core/services/supabase_gadai_service.dart';
 import 'package:galaxi_gadai/core/constants/app_colors.dart';
-import 'package:galaxi_gadai/core/config/system_config.dart';
 
 class LelangPage extends StatefulWidget {
   final String branchId;
@@ -87,8 +86,12 @@ class _LelangPageState extends State<LelangPage> {
                 // Update status di Supabase
                 await _svc.updateTransactionStatus(tx.id, 'Terjual');
 
-                // Tambahkan uang masuk ke Wallet Tenant
-                TenantWallet.topUp(price, 'Hasil Lelang ${tx.brand} ${tx.model}');
+                // Tambahkan uang masuk ke Wallet Tenant (Supabase)
+                await _svc.walletTopUp(
+                  widget.branchId,
+                  price,
+                  'Hasil Lelang ${tx.brand} ${tx.model}',
+                );
 
                 Navigator.pop(ctx);
                 _loadData();

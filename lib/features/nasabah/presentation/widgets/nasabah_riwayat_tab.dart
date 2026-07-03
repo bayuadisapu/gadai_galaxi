@@ -6,7 +6,8 @@ import '../pages/nasabah_transaksi_detail_page.dart';
 class NasabahRiwayatTab extends StatefulWidget {
   final Customer customer;
   final List<PawnTransaction> transactions;
-  const NasabahRiwayatTab({super.key, required this.customer, required this.transactions});
+  final VoidCallback? onRefresh;
+  const NasabahRiwayatTab({super.key, required this.customer, required this.transactions, this.onRefresh});
 
   @override
   State<NasabahRiwayatTab> createState() => _NasabahRiwayatTabState();
@@ -108,7 +109,10 @@ class _NasabahRiwayatTabState extends State<NasabahRiwayatTab> {
                       onTap: () => Navigator.push(
                         context,
                         MaterialPageRoute(builder: (context) => NasabahTransaksiDetailPage(transaction: tx)),
-                      ).then((_) => setState(() {})),
+                      ).then((_) {
+                        // Reload data dari Supabase melalui parent
+                        widget.onRefresh?.call();
+                      }),
                       child: Container(
                         padding: const EdgeInsets.all(16),
                         decoration: BoxDecoration(
@@ -137,7 +141,7 @@ class _NasabahRiwayatTabState extends State<NasabahRiwayatTab> {
                                 children: [
                                   Text('${tx.brand} ${tx.model}', style: const TextStyle(color: AppColors.textDark, fontSize: 14, fontWeight: FontWeight.bold)),
                                   const SizedBox(height: 4),
-                                  Text('${tx.id} • Jatuh Tempo: ${_formatDate(tx.dateDue)}', style: const TextStyle(color: AppColors.textMuted, fontSize: 12)),
+                                  Text('${tx.displayCode} • Jatuh Tempo: ${_formatDate(tx.dateDue)}', style: const TextStyle(color: AppColors.textMuted, fontSize: 12)),
                                   const SizedBox(height: 4),
                                   Text('Pinjaman: Rp ${_formatCurrency(tx.principal)}', style: const TextStyle(color: AppColors.textDark, fontSize: 13, fontWeight: FontWeight.w600)),
                                 ],

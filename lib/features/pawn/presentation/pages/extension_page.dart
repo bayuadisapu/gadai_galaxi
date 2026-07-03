@@ -49,7 +49,8 @@ class _ExtensionPageState extends State<ExtensionPage> {
   }
 
   List<PawnTransaction> _getActiveTransactions() {
-    return _allTxs.where((tx) => tx.status != 'Lunas').toList();
+    // Hanya tampilkan transaksi yang masih bisa diperpanjang
+    return _allTxs.where((tx) => tx.status == 'Aktif' || tx.status == 'Macet').toList();
   }
 
   PawnTransaction? _getSelectedTransaction() {
@@ -86,7 +87,9 @@ class _ExtensionPageState extends State<ExtensionPage> {
     final days = _selectedExtensionPeriod == '15 Hari' ? 15 : 30;
     final oldDueDate = tx.dateDue;
     final jatipDibayar = tx.totalFee;
-    final newDueDate = oldDueDate.add(Duration(days: days));
+    // Jika macet, hitung dari hari ini (bukan dari dateDue yang sudah lewat)
+    final baseDate = tx.dateDue.isBefore(DateTime.now()) ? DateTime.now() : tx.dateDue;
+    final newDueDate = baseDate.add(Duration(days: days));
     final newTotalFee = tx.dailyFee * days;
     final newTotalRepayment = tx.principal + newTotalFee;
 
@@ -99,7 +102,7 @@ class _ExtensionPageState extends State<ExtensionPage> {
       setState(() {
         tx.dateDue = newDueDate;
         tx.status = 'Aktif';
-        tx.dateApplied = DateTime.now();
+        // dateApplied TIDAK diubah — tetap tanggal gadai pertama kali
         tx.periodDays = days;
         tx.totalFee = newTotalFee;
         tx.totalRepayment = newTotalRepayment;
@@ -152,7 +155,7 @@ class _ExtensionPageState extends State<ExtensionPage> {
                 ),
                 const SizedBox(height: 10),
                 Text(
-                  'Tenor transaksi ${tx.id} berhasil diperpanjang +$days hari.\nJatuh tempo baru: ${_formatIndonesianDate(tx.dateDue)}.',
+                  'Tenor transaksi ${tx.displayCode} berhasil diperpanjang +$days hari.\nJatuh tempo baru: ${_formatIndonesianDate(tx.dateDue)}.',
                   textAlign: TextAlign.center,
                   style: const TextStyle(
                     color: AppColors.textMuted,
@@ -226,7 +229,9 @@ class _ExtensionPageState extends State<ExtensionPage> {
           ),
         ),
       ),
-      body: activeTxs.isEmpty
+      body: _isLoading
+          ? const Center(child: CircularProgressIndicator())
+          : activeTxs.isEmpty
           ? const Center(
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
@@ -272,7 +277,7 @@ class _ExtensionPageState extends State<ExtensionPage> {
                       items: activeTxs.map((tx) {
                         return DropdownMenuItem(
                           value: tx.id,
-                          child: Text('${tx.id} - ${tx.brand} ${tx.model}'),
+                          child: Text('${tx.displayCode} - ${tx.brand} ${tx.model}'),
                         );
                       }).toList(),
                       onChanged: (val) {
