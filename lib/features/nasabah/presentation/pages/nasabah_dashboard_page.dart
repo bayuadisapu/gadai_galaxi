@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:galaxi_gadai/core/constants/app_colors.dart';
 import 'package:galaxi_gadai/core/data/mock_data.dart';
 import 'package:galaxi_gadai/core/services/supabase_gadai_service.dart';
@@ -45,10 +46,13 @@ class _NasabahDashboardPageState extends State<NasabahDashboardPage> {
       context: context,
       builder: (ctx) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: const Text('Keluar Akun'),
-        content: const Text('Yakin ingin keluar dari akun nasabah?'),
+        title: Text('Keluar Akun', style: GoogleFonts.inter(fontWeight: FontWeight.bold)),
+        content: Text('Yakin ingin keluar dari akun nasabah?', style: GoogleFonts.inter(fontSize: 14)),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Batal')),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: Text('Batal', style: GoogleFonts.inter(color: Colors.grey, fontWeight: FontWeight.w600)),
+          ),
           TextButton(
             onPressed: () async {
               Navigator.pop(ctx);
@@ -57,7 +61,7 @@ class _NasabahDashboardPageState extends State<NasabahDashboardPage> {
               if (!mounted) return;
               Navigator.pushAndRemoveUntil(context, MaterialPageRoute(builder: (context) => const RolePortalPage()), (route) => false);
             },
-            child: const Text('Keluar', style: TextStyle(color: Colors.red)),
+            child: Text('Keluar', style: GoogleFonts.inter(color: Colors.red, fontWeight: FontWeight.bold)),
           ),
         ],
       ),
@@ -68,11 +72,11 @@ class _NasabahDashboardPageState extends State<NasabahDashboardPage> {
   Widget build(BuildContext context) {
     final statusBarHeight = MediaQuery.of(context).padding.top;
     final tabs = ['Beranda', 'Riwayat', 'Kalkulator', 'Profil'];
-    final icons = [Icons.home_rounded, Icons.receipt_long_outlined, Icons.calculate_outlined, Icons.person_outline_rounded];
+    final icons = [Icons.home_rounded, Icons.receipt_long_rounded, Icons.calculate_rounded, Icons.person_rounded];
 
     Widget body;
     if (_isLoading) {
-      body = const Center(child: CircularProgressIndicator());
+      body = const Center(child: CircularProgressIndicator(color: AppColors.royalBlue));
     } else {
       switch (_currentIndex) {
         case 0:
@@ -93,63 +97,234 @@ class _NasabahDashboardPageState extends State<NasabahDashboardPage> {
     }
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF6F9FC),
-      body: Column(
+      body: Stack(
         children: [
-          Container(
-            padding: EdgeInsets.only(top: statusBarHeight + 16, bottom: 20, left: 20, right: 20),
-            decoration: const BoxDecoration(color: AppColors.primary),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Row(children: [
-                  Container(
-                    width: 40, height: 40,
-                    decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.2), shape: BoxShape.circle),
-                    child: Center(child: Text(widget.customer.name.isNotEmpty ? widget.customer.name[0].toUpperCase() : 'N', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 18))),
-                  ),
-                  const SizedBox(width: 12),
-                  Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                    Text('Halo, ${widget.customer.name.split(' ').first} 👋', style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
-                    Text('Nasabah Galaxi Gadai', style: TextStyle(color: Colors.white.withValues(alpha: 0.8), fontSize: 12)),
-                  ]),
-                ]),
-                IconButton(icon: const Icon(Icons.logout_rounded, color: Colors.white), onPressed: _logout),
-              ],
+          // Background Painter
+          Positioned.fill(
+            child: CustomPaint(
+              painter: _NasabahDashboardBackgroundPainter(),
             ),
           ),
-          Expanded(child: RefreshIndicator(onRefresh: _loadData, child: body)),
-          Container(
-            padding: EdgeInsets.only(top: 12, bottom: MediaQuery.of(context).padding.bottom + 12),
-            decoration: BoxDecoration(color: Colors.white, boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 10, offset: const Offset(0, -4))]),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceAround,
-              children: List.generate(4, (index) {
-                final isSelected = _currentIndex == index;
-                if (isSelected) {
-                  return Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                    decoration: BoxDecoration(color: const Color(0xFFE6EFFD), borderRadius: BorderRadius.circular(24)),
-                    child: Row(mainAxisSize: MainAxisSize.min, children: [
-                      Icon(icons[index], color: AppColors.primary, size: 20),
-                      const SizedBox(width: 6),
-                      Text(tabs[index], style: const TextStyle(color: AppColors.primary, fontSize: 12, fontWeight: FontWeight.bold)),
-                    ]),
-                  );
-                }
-                return GestureDetector(
-                  onTap: () => setState(() => _currentIndex = index),
-                  child: Column(mainAxisSize: MainAxisSize.min, children: [
-                    Icon(icons[index], color: const Color(0xFF64748B), size: 22),
-                    const SizedBox(height: 4),
-                    Text(tabs[index], style: const TextStyle(color: Color(0xFF64748B), fontSize: 11, fontWeight: FontWeight.w500)),
-                  ]),
-                );
-              }),
-            ),
+          // Content
+          Column(
+            children: [
+              // Header
+              Container(
+                padding: EdgeInsets.only(top: statusBarHeight + 16, bottom: 12, left: 20, right: 20),
+                color: Colors.transparent,
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Row(
+                      children: [
+                        Container(
+                          width: 42,
+                          height: 42,
+                          decoration: BoxDecoration(
+                            gradient: const LinearGradient(
+                              colors: [Color(0xFF2563EB), Color(0xFF1D4ED8)],
+                              begin: Alignment.topLeft,
+                              end: Alignment.bottomRight,
+                            ),
+                            shape: BoxShape.circle,
+                            boxShadow: [
+                              BoxShadow(
+                                color: const Color(0xFF2563EB).withValues(alpha: 0.25),
+                                blurRadius: 8,
+                                offset: const Offset(0, 3),
+                              )
+                            ],
+                          ),
+                          child: Center(
+                            child: Text(
+                              widget.customer.name.isNotEmpty ? widget.customer.name[0].toUpperCase() : 'N',
+                              style: GoogleFonts.inter(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 18),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Halo, ${widget.customer.name.split(' ').first} 👋',
+                              style: GoogleFonts.inter(
+                                color: const Color(0xFF0F172A),
+                                fontSize: 16,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                            Text(
+                              'Nasabah Galaxi Gadai',
+                              style: GoogleFonts.inter(
+                                color: const Color(0xFF64748B),
+                                fontSize: 11,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                    Container(
+                      width: 40,
+                      height: 40,
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        shape: BoxShape.circle,
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withValues(alpha: 0.05),
+                            blurRadius: 8,
+                            offset: const Offset(0, 2),
+                          )
+                        ],
+                      ),
+                      child: IconButton(
+                        icon: const Icon(Icons.logout_rounded, color: Color(0xFFEF4444), size: 18),
+                        onPressed: _logout,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Expanded(
+                child: RefreshIndicator(
+                  color: AppColors.royalBlue,
+                  onRefresh: _loadData,
+                  child: body,
+                ),
+              ),
+              // Floating Bottom Navigation Bar
+              Container(
+                margin: EdgeInsets.only(
+                  left: 20,
+                  right: 20,
+                  bottom: MediaQuery.of(context).padding.bottom + 12,
+                  top: 8,
+                ),
+                padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 10),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(24),
+                  boxShadow: [
+                    BoxShadow(
+                      color: const Color(0xFF0F172A).withValues(alpha: 0.06),
+                      blurRadius: 20,
+                      offset: const Offset(0, 6),
+                    ),
+                  ],
+                  border: Border.all(color: const Color(0xFFF1F5F9)),
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceAround,
+                  children: List.generate(4, (index) {
+                    final isSelected = _currentIndex == index;
+                    if (isSelected) {
+                      return Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                        decoration: BoxDecoration(
+                          gradient: const LinearGradient(
+                            colors: [Color(0xFFEFF6FF), Color(0xFFDBEAFE)],
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
+                          ),
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(icons[index], color: AppColors.royalBlue, size: 18),
+                            const SizedBox(width: 6),
+                            Text(
+                              tabs[index],
+                              style: GoogleFonts.inter(
+                                color: AppColors.royalBlue,
+                                fontSize: 11,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ],
+                        ),
+                      );
+                    }
+                    return GestureDetector(
+                      onTap: () => setState(() => _currentIndex = index),
+                      child: Container(
+                        color: Colors.transparent,
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(icons[index], color: const Color(0xFF94A3B8), size: 20),
+                            const SizedBox(height: 3),
+                            Text(
+                              tabs[index],
+                              style: GoogleFonts.inter(
+                                color: const Color(0xFF94A3B8),
+                                fontSize: 10,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    );
+                  }),
+                ),
+              ),
+            ],
           ),
         ],
       ),
     );
   }
 }
+
+// ── NASABAH DASHBOARD BACKGROUND PAINTER ──
+class _NasabahDashboardBackgroundPainter extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    // Base gradient background
+    final bgPaint = Paint()
+      ..shader = const LinearGradient(
+        colors: [
+          Color(0xFFFFFFFF),
+          Color(0xFFF8FAFC),
+          Color(0xFFF1F5F9),
+        ],
+        begin: Alignment.topCenter,
+        end: Alignment.bottomCenter,
+      ).createShader(Offset.zero & size);
+    canvas.drawRect(Offset.zero & size, bgPaint);
+
+    // Subtle top right decoration arc
+    final path = Path()
+      ..moveTo(size.width * 0.4, 0)
+      ..quadraticBezierTo(size.width * 0.8, size.height * 0.12, size.width, size.height * 0.08)
+      ..lineTo(size.width, 0)
+      ..close();
+    canvas.drawPath(
+      path,
+      Paint()
+        ..shader = const LinearGradient(
+          colors: [Color(0xFF1E40AF), Color(0xFF2563EB)],
+          begin: Alignment.bottomLeft,
+          end: Alignment.topRight,
+        ).createShader(Rect.fromLTWH(size.width * 0.4, 0, size.width * 0.6, size.height * 0.12)),
+    );
+
+    // Dot pattern
+    final dotPaint = Paint()..color = const Color(0xFF2563EB).withValues(alpha: 0.04);
+    const spacing = 28.0;
+    for (double y = spacing; y < size.height; y += spacing) {
+      for (double x = spacing; x < size.width; x += spacing) {
+        canvas.drawCircle(Offset(x, y), 1.2, dotPaint);
+      }
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+}
+

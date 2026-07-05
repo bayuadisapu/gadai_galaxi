@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:galaxi_gadai/core/constants/app_colors.dart';
 import 'package:galaxi_gadai/core/data/mock_data.dart';
 import 'package:galaxi_gadai/core/services/supabase_gadai_service.dart';
@@ -34,8 +35,6 @@ class _NasabahProfilTabState extends State<NasabahProfilTab> {
     } catch (_) {}
   }
 
-
-
   // ── Dialog Ganti Password ──
   void _showGantiPasswordDialog() {
     final oldCtrl = TextEditingController();
@@ -49,12 +48,12 @@ class _NasabahProfilTabState extends State<NasabahProfilTab> {
       context: context,
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setDialogState) => AlertDialog(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-          title: const Row(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          title: Row(
             children: [
-              Icon(Icons.lock_outline_rounded, color: AppColors.primary, size: 20),
-              SizedBox(width: 8),
-              Text('Ganti Password'),
+              const Icon(Icons.lock_outline_rounded, color: AppColors.royalBlue, size: 22),
+              const SizedBox(width: 10),
+              Text('Ganti Password', style: GoogleFonts.inter(fontWeight: FontWeight.bold, fontSize: 16)),
             ],
           ),
           content: Form(
@@ -74,7 +73,10 @@ class _NasabahProfilTabState extends State<NasabahProfilTab> {
             ),
           ),
           actions: [
-            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Batal')),
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: Text('Batal', style: GoogleFonts.inter(color: Colors.grey, fontWeight: FontWeight.w600)),
+            ),
             ElevatedButton(
               onPressed: saving ? null : () async {
                 if (!formKey.currentState!.validate()) return;
@@ -88,7 +90,6 @@ class _NasabahProfilTabState extends State<NasabahProfilTab> {
                   if (!mounted) return;
                   final messenger = ScaffoldMessenger.of(context);
                   Navigator.pop(ctx);
-                  // Log ganti password jika berhasil
                   if (success) {
                     unawaited(_svc.logNasabahPasswordChange(_customer.id, _customer.name));
                   }
@@ -105,10 +106,13 @@ class _NasabahProfilTabState extends State<NasabahProfilTab> {
                   );
                 }
               },
-              style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.royalBlue,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              ),
               child: saving
                   ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-                  : const Text('Simpan', style: TextStyle(color: Colors.white)),
+                  : Text('Simpan', style: GoogleFonts.inter(color: Colors.white, fontWeight: FontWeight.bold)),
             ),
           ],
         ),
@@ -127,24 +131,35 @@ class _NasabahProfilTabState extends State<NasabahProfilTab> {
 
           // Avatar
           Container(
-            width: 80,
-            height: 80,
+            width: 84,
+            height: 84,
             decoration: BoxDecoration(
-              color: AppColors.primary.withValues(alpha: 0.12),
+              gradient: const LinearGradient(
+                colors: [Color(0xFF2563EB), Color(0xFF1D4ED8)],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
               shape: BoxShape.circle,
+              boxShadow: [
+                BoxShadow(
+                  color: const Color(0xFF2563EB).withValues(alpha: 0.2),
+                  blurRadius: 16,
+                  offset: const Offset(0, 6),
+                )
+              ],
             ),
             child: Center(
               child: Text(
                 _customer.name.isNotEmpty ? _customer.name[0].toUpperCase() : 'N',
-                style: const TextStyle(color: AppColors.primary, fontSize: 32, fontWeight: FontWeight.bold),
+                style: GoogleFonts.inter(color: Colors.white, fontSize: 32, fontWeight: FontWeight.w800),
               ),
             ),
           ),
-          const SizedBox(height: 12),
-          Text(_customer.name, style: const TextStyle(color: AppColors.textDark, fontSize: 20, fontWeight: FontWeight.bold)),
+          const SizedBox(height: 14),
+          Text(_customer.name, style: GoogleFonts.inter(color: AppColors.textDark, fontSize: 18, fontWeight: FontWeight.w800)),
           const SizedBox(height: 4),
-          Text(_customer.phone, style: const TextStyle(color: AppColors.textMuted, fontSize: 14)),
-          const SizedBox(height: 24),
+          Text(_customer.phone, style: GoogleFonts.inter(color: AppColors.textMuted, fontSize: 13, fontWeight: FontWeight.w500)),
+          const SizedBox(height: 28),
 
           // Info Card
           Container(
@@ -152,14 +167,17 @@ class _NasabahProfilTabState extends State<NasabahProfilTab> {
             padding: const EdgeInsets.all(20),
             decoration: BoxDecoration(
               color: Colors.white,
-              borderRadius: BorderRadius.circular(16),
+              borderRadius: BorderRadius.circular(20),
               border: Border.all(color: const Color(0xFFE2E8F0)),
+              boxShadow: [
+                BoxShadow(color: const Color(0xFF0F172A).withValues(alpha: 0.03), blurRadius: 16, offset: const Offset(0, 6)),
+              ],
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text('Informasi Pribadi', style: TextStyle(color: AppColors.textDark, fontSize: 15, fontWeight: FontWeight.bold)),
-                const SizedBox(height: 16),
+                Text('Informasi Pribadi', style: GoogleFonts.inter(color: AppColors.textDark, fontSize: 14, fontWeight: FontWeight.bold)),
+                const SizedBox(height: 18),
                 _infoRow(Icons.badge_outlined, 'NIK', _customer.nik.isEmpty ? '-' : _customer.nik),
                 const Divider(color: Color(0xFFF1F5F9), height: 24),
                 _infoRow(Icons.phone_outlined, 'Nomor HP', _customer.phone),
@@ -182,14 +200,17 @@ class _NasabahProfilTabState extends State<NasabahProfilTab> {
             padding: const EdgeInsets.all(20),
             decoration: BoxDecoration(
               color: Colors.white,
-              borderRadius: BorderRadius.circular(16),
+              borderRadius: BorderRadius.circular(20),
               border: Border.all(color: const Color(0xFFE2E8F0)),
+              boxShadow: [
+                BoxShadow(color: const Color(0xFF0F172A).withValues(alpha: 0.03), blurRadius: 16, offset: const Offset(0, 6)),
+              ],
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text('Statistik Transaksi', style: TextStyle(color: AppColors.textDark, fontSize: 15, fontWeight: FontWeight.bold)),
-                const SizedBox(height: 16),
+                Text('Statistik Transaksi', style: GoogleFonts.inter(color: AppColors.textDark, fontSize: 14, fontWeight: FontWeight.bold)),
+                const SizedBox(height: 18),
                 Builder(builder: (ctx) {
                   final aktif = _myTxs.where((tx) => tx.status == 'Aktif').length;
                   final lunas = _myTxs.where((tx) => tx.status == 'Lunas').length;
@@ -197,7 +218,7 @@ class _NasabahProfilTabState extends State<NasabahProfilTab> {
                   return Row(
                     mainAxisAlignment: MainAxisAlignment.spaceAround,
                     children: [
-                      _statItem('$aktif', 'Aktif', AppColors.primary),
+                      _statItem('$aktif', 'Aktif', AppColors.royalBlue),
                       _statItem('$lunas', 'Lunas', const Color(0xFF10B981)),
                       _statItem('$macet', 'Macet', const Color(0xFFEF4444)),
                     ],
@@ -206,7 +227,7 @@ class _NasabahProfilTabState extends State<NasabahProfilTab> {
               ],
             ),
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 24),
 
           // Ganti Password button
           SizedBox(
@@ -214,11 +235,12 @@ class _NasabahProfilTabState extends State<NasabahProfilTab> {
             height: 50,
             child: OutlinedButton.icon(
               onPressed: _showGantiPasswordDialog,
-              icon: const Icon(Icons.lock_outline_rounded, color: AppColors.primary),
-              label: const Text('Ganti Password', style: TextStyle(color: AppColors.primary, fontSize: 14, fontWeight: FontWeight.w600)),
+              icon: const Icon(Icons.lock_outline_rounded, color: AppColors.royalBlue, size: 18),
+              label: Text('Ganti Password', style: GoogleFonts.inter(color: AppColors.royalBlue, fontSize: 14, fontWeight: FontWeight.bold)),
               style: OutlinedButton.styleFrom(
-                side: const BorderSide(color: AppColors.primary),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                side: const BorderSide(color: Color(0xFFDBEAFE), width: 1.5),
+                backgroundColor: Colors.white,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
               ),
             ),
           ),
@@ -230,11 +252,12 @@ class _NasabahProfilTabState extends State<NasabahProfilTab> {
             height: 50,
             child: OutlinedButton.icon(
               onPressed: widget.onLogout,
-              icon: const Icon(Icons.logout_rounded, color: Color(0xFFEF4444)),
-              label: const Text('Keluar Akun', style: TextStyle(color: Color(0xFFEF4444), fontSize: 14, fontWeight: FontWeight.w600)),
+              icon: const Icon(Icons.logout_rounded, color: Color(0xFFEF4444), size: 18),
+              label: Text('Keluar Akun', style: GoogleFonts.inter(color: const Color(0xFFEF4444), fontSize: 14, fontWeight: FontWeight.bold)),
               style: OutlinedButton.styleFrom(
-                side: const BorderSide(color: Color(0xFFEF4444)),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                side: const BorderSide(color: Color(0xFFFEE2E2), width: 1.5),
+                backgroundColor: Colors.white,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
               ),
             ),
           ),
@@ -248,15 +271,23 @@ class _NasabahProfilTabState extends State<NasabahProfilTab> {
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Icon(icon, color: AppColors.primary, size: 20),
-        const SizedBox(width: 12),
+        Container(
+          width: 32,
+          height: 32,
+          decoration: BoxDecoration(
+            color: AppColors.royalBlue.withValues(alpha: 0.08),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Icon(icon, color: AppColors.royalBlue, size: 16),
+        ),
+        const SizedBox(width: 14),
         Expanded(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(label, style: const TextStyle(color: AppColors.textMuted, fontSize: 12)),
+              Text(label, style: GoogleFonts.inter(color: AppColors.textMuted, fontSize: 11, fontWeight: FontWeight.w500)),
               const SizedBox(height: 2),
-              Text(value, style: const TextStyle(color: AppColors.textDark, fontSize: 14, fontWeight: FontWeight.w600)),
+              Text(value, style: GoogleFonts.inter(color: AppColors.textDark, fontSize: 13, fontWeight: FontWeight.w700)),
             ],
           ),
         ),
@@ -267,14 +298,12 @@ class _NasabahProfilTabState extends State<NasabahProfilTab> {
   Widget _statItem(String count, String label, Color color) {
     return Column(
       children: [
-        Text(count, style: TextStyle(color: color, fontSize: 28, fontWeight: FontWeight.bold)),
+        Text(count, style: GoogleFonts.inter(color: color, fontSize: 24, fontWeight: FontWeight.w800)),
         const SizedBox(height: 4),
-        Text(label, style: const TextStyle(color: AppColors.textMuted, fontSize: 13)),
+        Text(label, style: GoogleFonts.inter(color: AppColors.textMuted, fontSize: 12, fontWeight: FontWeight.w600)),
       ],
     );
   }
-
-
 
   Widget _passwordField(
     BuildContext ctx,
@@ -287,19 +316,21 @@ class _NasabahProfilTabState extends State<NasabahProfilTab> {
     return TextFormField(
       controller: ctrl,
       obscureText: obscure,
-      style: const TextStyle(color: AppColors.textDark, fontSize: 14),
+      style: GoogleFonts.inter(color: AppColors.textDark, fontSize: 14, fontWeight: FontWeight.w600),
       decoration: InputDecoration(
         labelText: label,
-        prefixIcon: const Icon(Icons.lock_outline_rounded, color: AppColors.textMuted, size: 20),
+        labelStyle: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.w500),
+        prefixIcon: const Icon(Icons.lock_outline_rounded, color: AppColors.textMuted, size: 18),
         suffixIcon: IconButton(
-          icon: Icon(obscure ? Icons.visibility_outlined : Icons.visibility_off_outlined, color: AppColors.textMuted, size: 18),
+          icon: Icon(obscure ? Icons.visibility_outlined : Icons.visibility_off_outlined, color: AppColors.textMuted, size: 16),
           onPressed: onToggle,
         ),
         filled: true,
         fillColor: const Color(0xFFF8FAFC),
-        border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
-        enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
-        contentPadding: const EdgeInsets.symmetric(vertical: 12, horizontal: 12),
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
+        enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
+        focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: AppColors.royalBlue, width: 1.5)),
+        contentPadding: const EdgeInsets.symmetric(vertical: 14, horizontal: 12),
       ),
       validator: validator,
     );

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:galaxi_gadai/core/constants/app_colors.dart';
 import 'package:galaxi_gadai/core/data/mock_data.dart';
 import '../pages/nasabah_transaksi_detail_page.dart';
@@ -39,29 +40,41 @@ class _NasabahRiwayatTabState extends State<NasabahRiwayatTab> {
     return Column(
       children: [
         Container(
-          height: 54,
-          color: Colors.white,
+          height: 60,
+          color: Colors.transparent,
           child: ListView(
             scrollDirection: Axis.horizontal,
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
             children: ['Semua', 'Aktif', 'Lunas', 'Macet'].map((f) {
               final isSelected = _filter == f;
               return GestureDetector(
                 onTap: () => setState(() => _filter = f),
                 child: Container(
                   margin: const EdgeInsets.only(right: 8),
-                  padding: const EdgeInsets.symmetric(horizontal: 18),
+                  padding: const EdgeInsets.symmetric(horizontal: 20),
                   decoration: BoxDecoration(
-                    color: isSelected ? AppColors.primary : const Color(0xFFF1F5F9),
+                    color: isSelected ? AppColors.royalBlue : Colors.white,
                     borderRadius: BorderRadius.circular(20),
+                    border: Border.all(
+                      color: isSelected ? AppColors.royalBlue : const Color(0xFFE2E8F0),
+                    ),
+                    boxShadow: isSelected
+                        ? [
+                            BoxShadow(
+                              color: AppColors.royalBlue.withValues(alpha: 0.15),
+                              blurRadius: 8,
+                              offset: const Offset(0, 3),
+                            )
+                          ]
+                        : [],
                   ),
                   child: Center(
                     child: Text(
                       f,
-                      style: TextStyle(
+                      style: GoogleFonts.inter(
                         color: isSelected ? Colors.white : const Color(0xFF64748B),
-                        fontSize: 13,
-                        fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+                        fontSize: 12,
+                        fontWeight: isSelected ? FontWeight.bold : FontWeight.w600,
                       ),
                     ),
                   ),
@@ -70,16 +83,30 @@ class _NasabahRiwayatTabState extends State<NasabahRiwayatTab> {
             }).toList(),
           ),
         ),
-        const Divider(height: 1, color: Color(0xFFE2E8F0)),
+        const Padding(
+          padding: EdgeInsets.symmetric(horizontal: 16),
+          child: Divider(height: 1, color: Color(0xFFE2E8F0)),
+        ),
         Expanded(
           child: filtered.isEmpty
-              ? const Center(
+              ? Center(
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      Icon(Icons.receipt_long_outlined, size: 64, color: Color(0xFFCBD5E1)),
-                      SizedBox(height: 16),
-                      Text('Belum ada transaksi', style: TextStyle(color: AppColors.textMuted, fontSize: 14)),
+                      Container(
+                        width: 72,
+                        height: 72,
+                        decoration: const BoxDecoration(
+                          color: Color(0xFFF1F5F9),
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(Icons.receipt_long_rounded, size: 32, color: Color(0xFF94A3B8)),
+                      ),
+                      const SizedBox(height: 16),
+                      Text(
+                        'Belum ada transaksi',
+                        style: GoogleFonts.inter(color: AppColors.textMuted, fontSize: 14, fontWeight: FontWeight.w600),
+                      ),
                     ],
                   ),
                 )
@@ -90,7 +117,7 @@ class _NasabahRiwayatTabState extends State<NasabahRiwayatTab> {
                   separatorBuilder: (_, __) => const SizedBox(height: 12),
                   itemBuilder: (context, index) {
                     final tx = filtered[index];
-                    Color statusColor = AppColors.primary;
+                    Color statusColor = AppColors.royalBlue;
                     Color statusBg = const Color(0xFFEFF6FF);
                     if (tx.status == 'Macet') {
                       statusColor = const Color(0xFFEF4444);
@@ -110,47 +137,46 @@ class _NasabahRiwayatTabState extends State<NasabahRiwayatTab> {
                         context,
                         MaterialPageRoute(builder: (context) => NasabahTransaksiDetailPage(transaction: tx)),
                       ).then((_) {
-                        // Reload data dari Supabase melalui parent
                         widget.onRefresh?.call();
                       }),
                       child: Container(
                         padding: const EdgeInsets.all(16),
                         decoration: BoxDecoration(
                           color: Colors.white,
-                          borderRadius: BorderRadius.circular(16),
+                          borderRadius: BorderRadius.circular(20),
                           border: Border.all(color: const Color(0xFFE2E8F0)),
                           boxShadow: [
-                            BoxShadow(color: Colors.black.withValues(alpha: 0.03), blurRadius: 6, offset: const Offset(0, 2)),
+                            BoxShadow(color: const Color(0xFF0F172A).withValues(alpha: 0.03), blurRadius: 10, offset: const Offset(0, 4)),
                           ],
                         ),
                         child: Row(
                           children: [
                             Container(
-                              width: 44,
-                              height: 44,
+                              width: 48,
+                              height: 48,
                               decoration: BoxDecoration(
-                                color: AppColors.primary.withValues(alpha: 0.1),
+                                color: AppColors.royalBlue.withValues(alpha: 0.08),
                                 shape: BoxShape.circle,
                               ),
-                              child: Icon(collIcon, color: AppColors.primary, size: 22),
+                              child: Icon(collIcon, color: AppColors.royalBlue, size: 22),
                             ),
                             const SizedBox(width: 14),
                             Expanded(
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  Text('${tx.brand} ${tx.model}', style: const TextStyle(color: AppColors.textDark, fontSize: 14, fontWeight: FontWeight.bold)),
+                                  Text('${tx.brand} ${tx.model}', style: GoogleFonts.inter(color: AppColors.textDark, fontSize: 14, fontWeight: FontWeight.bold)),
                                   const SizedBox(height: 4),
-                                  Text('${tx.displayCode} • Jatuh Tempo: ${_formatDate(tx.dateDue)}', style: const TextStyle(color: AppColors.textMuted, fontSize: 12)),
-                                  const SizedBox(height: 4),
-                                  Text('Pinjaman: Rp ${_formatCurrency(tx.principal)}', style: const TextStyle(color: AppColors.textDark, fontSize: 13, fontWeight: FontWeight.w600)),
+                                  Text('${tx.displayCode} • Jatuh Tempo: ${_formatDate(tx.dateDue)}', style: GoogleFonts.inter(color: AppColors.textMuted, fontSize: 11, fontWeight: FontWeight.w500)),
+                                  const SizedBox(height: 6),
+                                  Text('Pinjaman: Rp ${_formatCurrency(tx.principal)}', style: GoogleFonts.inter(color: AppColors.textDark, fontSize: 13, fontWeight: FontWeight.w700)),
                                 ],
                               ),
                             ),
                             Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
                               decoration: BoxDecoration(color: statusBg, borderRadius: BorderRadius.circular(10)),
-                              child: Text(tx.status, style: TextStyle(color: statusColor, fontSize: 11, fontWeight: FontWeight.bold)),
+                              child: Text(tx.status, style: GoogleFonts.inter(color: statusColor, fontSize: 11, fontWeight: FontWeight.bold)),
                             ),
                           ],
                         ),
