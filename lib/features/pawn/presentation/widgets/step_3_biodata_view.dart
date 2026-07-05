@@ -1,7 +1,9 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:galaxi_gadai/core/constants/app_colors.dart';
+import 'package:galaxi_gadai/core/data/mock_data.dart';
 import 'package:image_picker/image_picker.dart';
+
 
 class Step3BiodataView extends StatefulWidget {
   final GlobalKey<FormState> formKey;
@@ -27,6 +29,10 @@ class Step3BiodataView extends StatefulWidget {
   final bool customerAndBarangPhotoUploaded;
   final ValueChanged<bool> onCustomerAndBarangPhotoUploadedChanged;
 
+  // Nasabah terdaftar
+  final Customer? selectedNasabah;
+  final VoidCallback onPickNasabah;
+
   const Step3BiodataView({
     super.key,
     required this.formKey,
@@ -47,6 +53,8 @@ class Step3BiodataView extends StatefulWidget {
     required this.onKtpUploadedChanged,
     required this.customerAndBarangPhotoUploaded,
     required this.onCustomerAndBarangPhotoUploadedChanged,
+    required this.selectedNasabah,
+    required this.onPickNasabah,
   });
 
   @override
@@ -57,8 +65,10 @@ class _Step3BiodataViewState extends State<Step3BiodataView> {
   // ── Foto state ──
   XFile? _ktpPhoto;
   XFile? _nasabahBarangPhoto;
+  XFile? _barangGadaiPhoto;
   bool _isPickingKtp = false;
   bool _isPickingNasabah = false;
+  bool _isPickingBarang = false;
 
   // ── Helper: bottom sheet pilih sumber foto ──
   Future<ImageSource?> _showSourcePicker(String title) async {
@@ -161,6 +171,21 @@ class _Step3BiodataViewState extends State<Step3BiodataView> {
     }
   }
 
+  /// Ambil foto barang gadai saja
+  Future<void> _pickBarangGadaiPhoto() async {
+    if (_isPickingBarang) return;
+    final ImageSource? source = await _showSourcePicker('Foto Barang Gadai');
+    if (source == null || !mounted) return;
+    setState(() => _isPickingBarang = true);
+    try {
+      final XFile? picked = await ImagePicker().pickImage(source: source, imageQuality: 80, maxWidth: 1280);
+      if (!mounted) return;
+      if (picked != null) setState(() => _barangGadaiPhoto = picked);
+    } finally {
+      if (mounted) setState(() => _isPickingBarang = false);
+    }
+  }
+
 
   InputDecoration _getInputDecoration({String? hint}) {
     return InputDecoration(
@@ -176,6 +201,68 @@ class _Step3BiodataViewState extends State<Step3BiodataView> {
       focusedBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(12),
         borderSide: const BorderSide(color: AppColors.inputFocusedBorder, width: 1.5),
+      ),
+    );
+  }
+
+  Widget _buildPhotoSlot({
+    required String label,
+    required IconData icon,
+    required XFile? photo,
+    required bool isUploaded,
+    required bool isPicking,
+    required VoidCallback onTap,
+  }) {
+    return GestureDetector(
+      onTap: isPicking ? null : onTap,
+      child: AspectRatio(
+        aspectRatio: 1,
+        child: Container(
+          decoration: BoxDecoration(
+            color: isUploaded ? const Color(0xFFECFDF5) : Colors.white,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: isUploaded ? const Color(0xFF10B981) : const Color(0xFFCBD5E1),
+              width: 1.5,
+            ),
+          ),
+          child: isPicking
+              ? const Center(child: SizedBox(width: 24, height: 24, child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.primary)))
+              : photo != null
+                  ? Stack(
+                      fit: StackFit.expand,
+                      children: [
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(11),
+                          child: Image.file(File(photo.path), fit: BoxFit.cover),
+                        ),
+                        Positioned(
+                          bottom: 4, left: 0, right: 0,
+                          child: Center(
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                              decoration: BoxDecoration(color: Colors.black54, borderRadius: BorderRadius.circular(6)),
+                              child: const Text('Ketuk ganti', style: TextStyle(color: Colors.white, fontSize: 9)),
+                            ),
+                          ),
+                        ),
+                      ],
+                    )
+                  : Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(icon, color: const Color(0xFF94A3B8), size: 28),
+                        const SizedBox(height: 6),
+                        Text(
+                          label,
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(color: Color(0xFF64748B), fontSize: 10, fontWeight: FontWeight.w600),
+                        ),
+                        const SizedBox(height: 2),
+                        const Text('Ketuk unggah', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 9)),
+                      ],
+                    ),
+        ),
       ),
     );
   }
@@ -206,7 +293,59 @@ class _Step3BiodataViewState extends State<Step3BiodataView> {
                 fontSize: 14,
               ),
             ),
-            const SizedBox(height: 28),
+            const SizedBox(height: 16),
+
+            // ── TOMBOL PILIH NASABAH TERDAFTAR ──
+            GestureDetector(
+              onTap: widget.onPickNasabah,
+              child: widget.selectedNasabah != null
+                  // Banner nasabah terpilih
+                  ? Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFECFDF5),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: const Color(0xFF10B981), width: 1.5),
+                      ),
+                      child: Row(children: [
+                        const Icon(Icons.check_circle_rounded, color: Color(0xFF10B981), size: 20),
+                        const SizedBox(width: 10),
+                        Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                          Text(widget.selectedNasabah!.name, style: const TextStyle(fontWeight: FontWeight.bold, color: AppColors.textDark, fontSize: 14)),
+                          Text(widget.selectedNasabah!.phone, style: const TextStyle(color: AppColors.textMuted, fontSize: 12)),
+                        ])),
+                        const Text('Ganti', style: TextStyle(color: Color(0xFF10B981), fontSize: 12, fontWeight: FontWeight.w600)),
+                      ]),
+                    )
+                  // Tombol pilih
+                  : Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                      decoration: BoxDecoration(
+                        color: AppColors.primary.withValues(alpha: 0.05),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: AppColors.primary.withValues(alpha: 0.3), width: 1.5),
+                      ),
+                      child: const Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+                        Icon(Icons.people_alt_outlined, color: AppColors.primary, size: 18),
+                        SizedBox(width: 8),
+                        Text('Pilih Nasabah Terdaftar', style: TextStyle(color: AppColors.primary, fontWeight: FontWeight.bold, fontSize: 14)),
+                      ]),
+                    ),
+            ),
+            const SizedBox(height: 12),
+
+            // Divider antara pick dan form manual
+            Row(children: [
+              const Expanded(child: Divider()),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 10),
+                child: Text('atau isi manual', style: TextStyle(color: Colors.grey.shade400, fontSize: 11)),
+              ),
+              const Expanded(child: Divider()),
+            ]),
+            const SizedBox(height: 16),
 
             // NIK KTP Input
             const Text(
@@ -477,131 +616,49 @@ class _Step3BiodataViewState extends State<Step3BiodataView> {
             ),
             const SizedBox(height: 24),
 
-            // Upload KTP Section
+            // ─── 3-Kolom Foto ───────────────────────────────
             const Text(
-              'Foto KTP Nasabah',
+              'Foto Dokumen & Jaminan',
               style: TextStyle(
                 color: AppColors.textDark,
                 fontSize: 14,
                 fontWeight: FontWeight.w600,
               ),
             ),
-            const SizedBox(height: 8),
-            GestureDetector(
-              onTap: _isPickingKtp ? null : _pickKtpPhoto,
-              child: Container(
-                width: double.infinity,
-                constraints: const BoxConstraints(minHeight: 100),
-                decoration: BoxDecoration(
-                  color: widget.ktpUploaded ? const Color(0xFFECFDF5) : Colors.white,
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(
-                    color: widget.ktpUploaded ? const Color(0xFF10B981) : const Color(0xFFCBD5E1),
-                    width: 1.5,
-                  ),
-                ),
-                child: _isPickingKtp
-                    ? const Padding(
-                        padding: EdgeInsets.symmetric(vertical: 24),
-                        child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-                          CircularProgressIndicator(color: AppColors.primary),
-                          SizedBox(height: 10),
-                          Text('Membuka kamera...', style: TextStyle(color: AppColors.textMuted, fontSize: 13)),
-                        ]),
-                      )
-                    : _ktpPhoto != null
-                        ? Stack(
-                            children: [
-                              ClipRRect(
-                                borderRadius: BorderRadius.circular(11),
-                                child: Image.file(File(_ktpPhoto!.path), width: double.infinity, height: 160, fit: BoxFit.cover),
-                              ),
-                              Positioned(
-                                top: 8, right: 8,
-                                child: Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                  decoration: BoxDecoration(color: Colors.black54, borderRadius: BorderRadius.circular(8)),
-                                  child: const Text('Ketuk untuk ganti', style: TextStyle(color: Colors.white, fontSize: 11)),
-                                ),
-                              ),
-                            ],
-                          )
-                        : const Padding(
-                            padding: EdgeInsets.symmetric(vertical: 24),
-                            child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-                              Icon(Icons.credit_card_rounded, color: Color(0xFF64748B), size: 36),
-                              SizedBox(height: 8),
-                              Text('Unggah Foto KTP', style: TextStyle(color: Color(0xFF64748B), fontWeight: FontWeight.bold, fontSize: 13)),
-                              SizedBox(height: 4),
-                              Text('Kamera atau Galeri', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 11)),
-                            ]),
-                          ),
-              ),
-            ),
-            const SizedBox(height: 20),
-
-            // Foto Nasabah & Barang Jaminan
-            const Text(
-              'Foto Nasabah & Barang Jaminan',
-              style: TextStyle(
-                color: AppColors.textDark,
-                fontSize: 14,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-            const SizedBox(height: 8),
-            GestureDetector(
-              onTap: _isPickingNasabah ? null : _pickNasabahBarangPhoto,
-              child: Container(
-                width: double.infinity,
-                constraints: const BoxConstraints(minHeight: 100),
-                decoration: BoxDecoration(
-                  color: widget.customerAndBarangPhotoUploaded ? const Color(0xFFECFDF5) : Colors.white,
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(
-                    color: widget.customerAndBarangPhotoUploaded ? const Color(0xFF10B981) : const Color(0xFFCBD5E1),
-                    width: 1.5,
-                  ),
-                ),
-                child: _isPickingNasabah
-                    ? const Padding(
-                        padding: EdgeInsets.symmetric(vertical: 24),
-                        child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-                          CircularProgressIndicator(color: AppColors.primary),
-                          SizedBox(height: 10),
-                          Text('Membuka kamera...', style: TextStyle(color: AppColors.textMuted, fontSize: 13)),
-                        ]),
-                      )
-                    : _nasabahBarangPhoto != null
-                        ? Stack(
-                            children: [
-                              ClipRRect(
-                                borderRadius: BorderRadius.circular(11),
-                                child: Image.file(File(_nasabahBarangPhoto!.path), width: double.infinity, height: 160, fit: BoxFit.cover),
-                              ),
-                              Positioned(
-                                top: 8, right: 8,
-                                child: Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                  decoration: BoxDecoration(color: Colors.black54, borderRadius: BorderRadius.circular(8)),
-                                  child: const Text('Ketuk untuk ganti', style: TextStyle(color: Colors.white, fontSize: 11)),
-                                ),
-                              ),
-                            ],
-                          )
-                        : const Padding(
-                            padding: EdgeInsets.symmetric(vertical: 24),
-                            child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-                              Icon(Icons.people_alt_rounded, color: Color(0xFF64748B), size: 36),
-                              SizedBox(height: 8),
-                              Text('Unggah Foto Nasabah & Barang Jaminan',
-                                  textAlign: TextAlign.center,
-                                  style: TextStyle(color: Color(0xFF64748B), fontWeight: FontWeight.bold, fontSize: 13)),
-                              SizedBox(height: 4),
-                              Text('Kamera atau Galeri', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 11)),
-                            ]),
-                          ),
-              ),
+            const SizedBox(height: 10),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Kolom 1 — Foto KTP
+                Expanded(child: _buildPhotoSlot(
+                  label: 'Foto KTP',
+                  icon: Icons.credit_card_rounded,
+                  photo: _ktpPhoto,
+                  isUploaded: widget.ktpUploaded,
+                  isPicking: _isPickingKtp,
+                  onTap: _pickKtpPhoto,
+                )),
+                const SizedBox(width: 8),
+                // Kolom 2 — Foto Nasabah & Barang
+                Expanded(child: _buildPhotoSlot(
+                  label: 'Nasabah+Barang',
+                  icon: Icons.people_alt_rounded,
+                  photo: _nasabahBarangPhoto,
+                  isUploaded: widget.customerAndBarangPhotoUploaded,
+                  isPicking: _isPickingNasabah,
+                  onTap: _pickNasabahBarangPhoto,
+                )),
+                const SizedBox(width: 8),
+                // Kolom 3 — Foto Barang Gadai
+                Expanded(child: _buildPhotoSlot(
+                  label: 'Barang Gadai',
+                  icon: Icons.camera_enhance_outlined,
+                  photo: _barangGadaiPhoto,
+                  isUploaded: _barangGadaiPhoto != null,
+                  isPicking: _isPickingBarang,
+                  onTap: _pickBarangGadaiPhoto,
+                )),
+              ],
             ),
           ],
         ),

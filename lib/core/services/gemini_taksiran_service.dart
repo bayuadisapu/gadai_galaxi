@@ -19,11 +19,13 @@ class TaksiranResult {
 class GeminiTaksiranService {
   static String get _apiKey => dotenv.get('GEMINI_API_KEY', fallback: '');
 
-  // Coba beberapa model — dari yang terbaru ke fallback
+  // Urutan: pakai model dengan free tier limit TINGGI dulu (1500 RPD)
+  // Hindari gemini-3.5-flash / gemini-flash-latest (hanya 20 RPD)
   static const List<String> _models = [
-    'gemini-flash-latest',
-    'gemini-2.0-flash',
-    'gemini-1.5-flash',
+    'gemini-2.5-flash-lite',   // ✓ bekerja, free tier luas
+    'gemini-2.5-flash',        // fallback — lebih besar
+    'gemini-2.0-flash-lite',   // fallback
+    'gemini-2.0-flash',        // fallback
   ];
 
   static const String _baseUrl =
@@ -74,20 +76,18 @@ Sesuaikan dengan kondisi pasar Indonesia terkini.
       }
     });
 
-    // Coba setiap model sampai berhasil
     Exception? lastError;
     for (final modelName in _models) {
       try {
-        // Gunakan header X-goog-api-key (sesuai Google AI Studio cURL)
         final url = '$_baseUrl/$modelName:generateContent';
         final response = await http.post(
           Uri.parse(url),
           headers: {
             'Content-Type': 'application/json',
-            'X-goog-api-key': _apiKey,
+            'x-goog-api-key': _apiKey,
           },
           body: body,
-        ).timeout(const Duration(seconds: 15));
+        ).timeout(const Duration(seconds: 20));
 
         if (response.statusCode == 401) {
           throw Exception(
@@ -97,17 +97,21 @@ Sesuaikan dengan kondisi pasar Indonesia terkini.
         }
 
         if (response.statusCode == 429) {
-          throw Exception('Rate limit tercapai. Coba lagi dalam beberapa detik.');
+          // Rate limit pada model ini — coba model berikutnya
+          lastError = Exception('Rate limit pada model $modelName, mencoba model lain...');
+          continue;
         }
 
         if (response.statusCode != 200) {
-          // Coba model berikutnya jika 404
           if (response.statusCode == 404) {
             lastError = Exception('Model $modelName tidak tersedia');
             continue;
           }
-          throw Exception('Error dari server Gemini: ${response.statusCode}\n${response.body}');
+          // Coba model berikutnya untuk error server lainnya
+          lastError = Exception('Error ${response.statusCode} dari model $modelName');
+          continue;
         }
+
 
         final data = jsonDecode(response.body);
         

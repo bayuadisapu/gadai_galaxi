@@ -68,6 +68,7 @@ class _NewPawnPageState extends State<NewPawnPage> {
   String _adminFeePaymentMethod = 'Potong Pinjaman';
 
   // --- Step 3 State ---
+  Customer? _selectedNasabah; // nasabah yang dipilih dari daftar
   final TextEditingController _nikController = TextEditingController();
   final TextEditingController _fullNameController = TextEditingController();
   final TextEditingController _phoneController = TextEditingController();
@@ -175,6 +176,42 @@ class _NewPawnPageState extends State<NewPawnPage> {
       _emasSistemTebus = 'Langsung Tebas';
       _vehicleSistemTebus = 'Langsung Tebas';
       _selectedVehicleCondition = null;
+    });
+  }
+
+  // ── PILIH NASABAH TERDAFTAR ──
+  void _pickNasabahTerdaftar() async {
+    final svc = SupabaseGadaiService.instance;
+    // Ambil semua nasabah di cabang ini
+    final list = await svc.fetchNasabah(branchId: widget.branchId);
+    if (!mounted) return;
+
+    final Customer? picked = await showModalBottomSheet<Customer>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => _NasabahPickerSheet(nasabahList: list),
+    );
+
+    if (picked == null) return;
+
+    // Auto-fill semua field dari nasabah terpilih
+    setState(() {
+      _selectedNasabah = picked;
+      _nikController.text = picked.nik;
+      _fullNameController.text = picked.name;
+      _phoneController.text = picked.phone;
+      _addressController.text = picked.address;
+      _birthPlaceController.text = picked.birthPlace;
+      _selectedGender = picked.gender;
+
+      // Parse birthDate: contoh "12 Maret 1995"
+      final parts = picked.birthDate.split(' ');
+      if (parts.length >= 3) {
+        _birthDay = parts[0];
+        _birthMonth = parts[1];
+        _birthYear = parts[2];
+      }
     });
   }
 
@@ -292,16 +329,19 @@ class _NewPawnPageState extends State<NewPawnPage> {
         setState(() => _isLoading = true);
 
         try {
-          // Cek apakah nasabah dengan HP yang sama sudah terdaftar
-          Customer? existingCust = await svc.fetchNasabahByPhone(newCust.phone);
-
           final Customer createdCust;
-          if (existingCust != null) {
-            // Nasabah sudah ada — gunakan data yang existing
-            createdCust = existingCust;
+          if (_selectedNasabah != null) {
+            // Nasabah dipilih dari picker — pakai ID langsung (sudah pasti benar)
+            createdCust = _selectedNasabah!;
           } else {
-            // Nasabah baru — buat ke DB
-            createdCust = await svc.createNasabah(newCust);
+            // Input manual — cek apakah nomor HP sudah terdaftar
+            Customer? existingCust = await svc.fetchNasabahByPhone(newCust.phone);
+            if (existingCust != null) {
+              createdCust = existingCust;
+            } else {
+              // Nasabah benar-benar baru — buat ke DB
+              createdCust = await svc.createNasabah(newCust);
+            }
           }
 
           final newTx = PawnTransaction(
@@ -440,6 +480,8 @@ class _NewPawnPageState extends State<NewPawnPage> {
           onKtpUploadedChanged: (val) => setState(() => _ktpUploaded = val),
           customerAndBarangPhotoUploaded: _customerAndBarangPhotoUploaded,
           onCustomerAndBarangPhotoUploadedChanged: (val) => setState(() => _customerAndBarangPhotoUploaded = val),
+          selectedNasabah: _selectedNasabah,
+          onPickNasabah: _pickNasabahTerdaftar,
         );
       default:
         return Container();
@@ -545,6 +587,136 @@ class _NewPawnPageState extends State<NewPawnPage> {
                       ),
               ),
             ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ═══════════════════════════════════════════════════════
+// NASABAH PICKER BOTTOM SHEET
+// ═══════════════════════════════════════════════════════
+
+class _NasabahPickerSheet extends StatefulWidget {
+  final List<Customer> nasabahList;
+  const _NasabahPickerSheet({required this.nasabahList});
+
+  @override
+  State<_NasabahPickerSheet> createState() => _NasabahPickerSheetState();
+}
+
+class _NasabahPickerSheetState extends State<_NasabahPickerSheet> {
+  final _searchCtrl = TextEditingController();
+  List<Customer> _filtered = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _filtered = widget.nasabahList;
+    _searchCtrl.addListener(_filter);
+  }
+
+  @override
+  void dispose() {
+    _searchCtrl.dispose();
+    super.dispose();
+  }
+
+  void _filter() {
+    final q = _searchCtrl.text.toLowerCase();
+    setState(() {
+      _filtered = widget.nasabahList.where((c) =>
+        c.name.toLowerCase().contains(q) ||
+        c.phone.contains(q) ||
+        c.nik.contains(q)
+      ).toList();
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      height: MediaQuery.of(context).size.height * 0.80,
+      decoration: const BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      child: Column(
+        children: [
+          // Handle
+          const SizedBox(height: 12),
+          Center(child: Container(width: 40, height: 4, decoration: BoxDecoration(color: Colors.grey.shade300, borderRadius: BorderRadius.circular(2)))),
+          const SizedBox(height: 16),
+
+          // Title
+          const Padding(
+            padding: EdgeInsets.symmetric(horizontal: 20),
+            child: Row(children: [
+              Icon(Icons.people_alt_rounded, color: AppColors.primary, size: 22),
+              SizedBox(width: 10),
+              Text('Pilih Nasabah Terdaftar', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: AppColors.textDark)),
+            ]),
+          ),
+          const SizedBox(height: 14),
+
+          // Search bar
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 20),
+            child: TextField(
+              controller: _searchCtrl,
+              autofocus: true,
+              decoration: InputDecoration(
+                hintText: 'Cari nama, nomor HP, atau NIK...',
+                hintStyle: const TextStyle(color: AppColors.textMuted, fontSize: 13),
+                prefixIcon: const Icon(Icons.search_rounded, color: AppColors.textMuted),
+                filled: true,
+                fillColor: const Color(0xFFF1F5F9),
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+                contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              ),
+            ),
+          ),
+          const SizedBox(height: 10),
+
+          // Divider
+          const Divider(height: 1),
+
+          // List nasabah
+          Expanded(
+            child: _filtered.isEmpty
+                ? Center(
+                    child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
+                      Icon(Icons.search_off_rounded, size: 48, color: Colors.grey.shade300),
+                      const SizedBox(height: 8),
+                      Text(
+                        widget.nasabahList.isEmpty ? 'Belum ada nasabah terdaftar' : 'Nasabah tidak ditemukan',
+                        style: const TextStyle(color: AppColors.textMuted, fontSize: 13),
+                      ),
+                    ]),
+                  )
+                : ListView.separated(
+                    padding: const EdgeInsets.symmetric(vertical: 8),
+                    itemCount: _filtered.length,
+                    separatorBuilder: (_, __) => const Divider(height: 1, indent: 72),
+                    itemBuilder: (ctx, i) {
+                      final c = _filtered[i];
+                      return ListTile(
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 4),
+                        leading: CircleAvatar(
+                          backgroundColor: AppColors.primary.withValues(alpha: 0.1),
+                          child: Text(
+                            c.name.isNotEmpty ? c.name[0].toUpperCase() : '?',
+                            style: const TextStyle(color: AppColors.primary, fontWeight: FontWeight.bold),
+                          ),
+                        ),
+                        title: Text(c.name, style: const TextStyle(fontWeight: FontWeight.w600, color: AppColors.textDark, fontSize: 14)),
+                        subtitle: Text('${c.phone}  •  NIK: ${c.nik.isNotEmpty ? c.nik : '-'}', style: const TextStyle(color: AppColors.textMuted, fontSize: 11)),
+                        trailing: const Icon(Icons.chevron_right_rounded, color: AppColors.textMuted),
+                        onTap: () => Navigator.pop(ctx, c),
+                      );
+                    },
+                  ),
           ),
         ],
       ),

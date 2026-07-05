@@ -42,7 +42,7 @@ class _SuperAdminLoginPageState extends State<SuperAdminLoginPage> {
       setState(() => _isLoading = false);
 
       if (account == null) {
-        setState(() => _errorMessage = 'Email atau kata sandi salah');
+        setState(() => _errorMessage = 'Username atau kata sandi salah');
         return;
       }
 
@@ -185,14 +185,14 @@ class _SuperAdminLoginPageState extends State<SuperAdminLoginPage> {
                                 ),
                               ],
 
-                              _buildLabel('Email Super Admin'),
+                              _buildLabel('Username Super Admin'),
                               const SizedBox(height: 8),
                               TextFormField(
                                 controller: _emailController,
-                                keyboardType: TextInputType.emailAddress,
-                                decoration: _inputDecoration('superadmin@galaxi.id', Icons.alternate_email_rounded),
+                                keyboardType: TextInputType.text,
+                                decoration: _inputDecoration('Masukkan username', Icons.person_outline_rounded),
                                 style: const TextStyle(color: AppColors.textDark, fontSize: 15),
-                                validator: (v) => v == null || v.trim().isEmpty ? 'Email tidak boleh kosong' : null,
+                                validator: (v) => v == null || v.trim().isEmpty ? 'Username tidak boleh kosong' : null,
                                 onChanged: (_) => setState(() => _errorMessage = null),
                               ),
                               const SizedBox(height: 20),

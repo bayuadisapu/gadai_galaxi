@@ -13,6 +13,7 @@ import 'lelang_page.dart';
 import 'barang_terjual_page.dart';
 import 'history_transaksi_page.dart';
 import 'file_pendukung_page.dart';
+import 'kas_page.dart';
 
 class AdminCabangDashboardPage extends StatefulWidget {
   final String namaAdmin;
@@ -484,6 +485,11 @@ class _AdminCabangDashboardPageState extends State<AdminCabangDashboardPage> {
                             body: LaporanTabContent(branchId: widget.cabangId),
                           ),
                         ));
+                      }),
+                      _buildGridItem('Uang Kas', Icons.account_balance_wallet_rounded, () {
+                        Navigator.push(context, MaterialPageRoute(
+                          builder: (_) => KasPage(branchId: widget.cabangId, namaCabang: widget.namaCabang),
+                        )).then((_) => _loadData());
                       }),
                       _buildGridItem('Lelang', Icons.gavel_rounded, () {
                         Navigator.push(context, MaterialPageRoute(builder: (_) => LelangPage(branchId: widget.cabangId)));

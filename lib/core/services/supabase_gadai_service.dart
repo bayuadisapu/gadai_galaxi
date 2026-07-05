@@ -36,24 +36,22 @@ class SupabaseGadaiService {
     try {
       String email = usernameOrEmail.trim();
 
-      // Jika input tidak mengandung '@', cari email yang sesuai dari kolom username di tabel profiles secara dinamis.
+      // Jika input bukan email, lookup via RPC (security definer — bypass RLS)
+      // sama persis dengan cara servis HP
       if (!email.contains('@')) {
         try {
-          final res = await _client
-              .from('profiles')
-              .select('email')
-              .ilike('username', email)
-              .limit(1);
-          if (res.isNotEmpty && res.first['email'] != null) {
-            email = res.first['email'] as String;
+          final dynamic rawEmail = await _client
+              .rpc('get_email_by_username', params: {'p_username': email.toLowerCase()});
+          final String? foundEmail = rawEmail as String?;
+          if (foundEmail != null && foundEmail.isNotEmpty) {
+            email = foundEmail;
           } else {
-            // Fallback ke pola username@gadai.com jika profile tidak ditemukan
-            email = '$email@gadai.com';
+            debugPrint('Username tidak ditemukan: $email');
+            return null;
           }
         } catch (e) {
-          // Jika RLS memblokir/gagal query, gunakan fallback pola username@gadai.com
-          debugPrint('Gagal mengambil email dari username: $e');
-          email = '$email@gadai.com';
+          debugPrint('Gagal lookup email via RPC: $e');
+          return null;
         }
       }
 
@@ -455,20 +453,13 @@ class SupabaseGadaiService {
         .from('profiles')
         .select('id, username, full_name, role, branch_id, email')
         .eq('is_active', true)
+        .inFilter('role', ['admin', 'superadmin'])
         .order('created_at', ascending: false);
 
     return data.map<Map<String, String>>((row) {
-      String gadaiRole;
-      switch (row['role'] as String? ?? '') {
-        case 'superadmin':
-          gadaiRole = 'super_admin';
-          break;
-        case 'admin':
-          gadaiRole = 'admin_cabang';
-          break;
-        default:
-          gadaiRole = 'verifikator';
-      }
+      final gadaiRole = (row['role'] as String? ?? '') == 'superadmin'
+          ? 'super_admin'
+          : 'admin_cabang';
       return {
         'id': row['id'] as String? ?? '',
         'username': row['username'] as String? ?? '',
@@ -582,6 +573,43 @@ class SupabaseGadaiService {
       });
     } catch (_) {}
   }
+
+  /// Debit / keluar kas cabang — kurangi saldo, tolak jika saldo tidak cukup
+  Future<String?> walletDebit(String branchId, int amount, String description) async {
+    try {
+      // Cek saldo terlebih dahulu
+      final currentBalance = await fetchWalletBalance(branchId);
+      if (currentBalance < amount) {
+        return 'Saldo kas tidak cukup (Saldo: Rp ${_formatCurrencySvc(currentBalance)})';
+      }
+      // Kurangi saldo
+      await _client.rpc('gadai_wallet_topup', params: {
+        'p_branch_id': branchId,
+        'p_amount': -amount, // negatif = debit
+      });
+      // Insert mutasi
+      await _client.from('gadai_wallet_mutations').insert({
+        'branch_id': branchId,
+        'type': 'Debit',
+        'amount': amount,
+        'description': description,
+      });
+      return null; // sukses
+    } catch (e) {
+      return 'Gagal: $e';
+    }
+  }
+
+  String _formatCurrencySvc(int val) {
+    final s = val.toString();
+    final buf = StringBuffer();
+    for (int i = 0; i < s.length; i++) {
+      if (i > 0 && (s.length - i) % 3 == 0) buf.write('.');
+      buf.write(s[i]);
+    }
+    return buf.toString();
+  }
+
 
   /// Ambil riwayat mutasi wallet
   Future<List<Map<String, dynamic>>> fetchWalletMutations(String branchId) async {

@@ -124,236 +124,255 @@ class _RegisterPageState extends State<RegisterPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.background,
-      body: LayoutBuilder(
-        builder: (context, constraints) {
-          return SingleChildScrollView(
-            child: ConstrainedBox(
-              constraints: BoxConstraints(minHeight: constraints.maxHeight),
-              child: IntrinsicHeight(
-                child: Column(
-                  children: [
-                    // Header
-                    Container(
-                      padding: EdgeInsets.only(
-                        top: MediaQuery.of(context).padding.top + 32,
-                        bottom: 32,
-                        left: 24,
-                        right: 24,
-                      ),
-                      width: double.infinity,
+      body: CustomPaint(
+        painter: _ElegantMotifPainter(),
+        child: SafeArea(
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              return SingleChildScrollView(
+                child: ConstrainedBox(
+                  constraints: BoxConstraints(minHeight: constraints.maxHeight),
+                  child: IntrinsicHeight(
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 24),
                       child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Container(
-                            width: 56,
-                            height: 56,
-                            decoration: BoxDecoration(
-                              color: Colors.white.withValues(alpha: 0.2),
-                              shape: BoxShape.circle,
-                            ),
-                            child: const Icon(
-                              Icons.person_add_alt_1_rounded,
-                              color: Colors.white,
-                              size: 28,
-                            ),
-                          ),
                           const SizedBox(height: 16),
-                          const Text(
-                            'Daftar Akun Nasabah',
-                            style: TextStyle(
+                          // Back Button
+                          GestureDetector(
+                            onTap: () => Navigator.pop(context),
+                            child: Container(
+                              padding: const EdgeInsets.all(10),
+                              decoration: BoxDecoration(
+                                color: Colors.white,
+                                shape: BoxShape.circle,
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: Colors.black.withValues(alpha: 0.05),
+                                    blurRadius: 10,
+                                    offset: const Offset(0, 4),
+                                  ),
+                                ],
+                                border: Border.all(color: const Color(0xFFE2E8F0)),
+                              ),
+                              child: const Icon(Icons.arrow_back_rounded, color: Color(0xFF1953A6), size: 20),
+                            ),
+                          ),
+                          const SizedBox(height: 32),
+
+                          // Form Card
+                          Container(
+                            width: double.infinity,
+                            padding: const EdgeInsets.all(24),
+                            decoration: BoxDecoration(
                               color: Colors.white,
-                              fontSize: 24,
-                              fontWeight: FontWeight.bold,
+                              borderRadius: BorderRadius.circular(24),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: const Color(0xFF1E293B).withValues(alpha: 0.04),
+                                  blurRadius: 24,
+                                  offset: const Offset(0, 8),
+                                ),
+                              ],
+                              border: Border.all(color: const Color(0xFFE2E8F0), width: 1.2),
+                            ),
+                            child: Form(
+                              key: _formKey,
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Center(
+                                    child: Container(
+                                      width: 68,
+                                      height: 68,
+                                      decoration: BoxDecoration(
+                                        color: const Color(0xFF1953A6).withValues(alpha: 0.08),
+                                        shape: BoxShape.circle,
+                                      ),
+                                      child: const Icon(Icons.person_add_alt_1_rounded, color: Color(0xFF1953A6), size: 32),
+                                    ),
+                                  ),
+                                  const SizedBox(height: 20),
+                                  const Center(
+                                    child: Text(
+                                      'Daftar Akun Nasabah',
+                                      style: TextStyle(color: Color(0xFF0F172A), fontSize: 22, fontWeight: FontWeight.bold, letterSpacing: -0.5),
+                                    ),
+                                  ),
+                                  const SizedBox(height: 6),
+                                  const Center(
+                                    child: Text(
+                                      'Buat akun untuk mulai mengajukan gadai',
+                                      textAlign: TextAlign.center,
+                                      style: TextStyle(color: Color(0xFF64748B), fontSize: 13),
+                                    ),
+                                  ),
+                                  const SizedBox(height: 32),
+
+                                  _buildLabel('Nama Lengkap'),
+                                  const SizedBox(height: 8),
+                                  _buildTextField(
+                                    controller: _nameController,
+                                    hint: 'Sesuai KTP',
+                                    icon: Icons.badge_outlined,
+                                    validator: (v) => v == null || v.trim().isEmpty ? 'Nama tidak boleh kosong' : null,
+                                  ),
+                                  const SizedBox(height: 20),
+
+                                  _buildLabel('Nomor HP (untuk login)'),
+                                  const SizedBox(height: 8),
+                                  _buildTextField(
+                                    controller: _phoneController,
+                                    hint: '08xxxxxxxxxx',
+                                    icon: Icons.phone_outlined,
+                                    keyboardType: TextInputType.phone,
+                                    validator: (v) {
+                                      if (v == null || v.trim().isEmpty) return 'Nomor HP tidak boleh kosong';
+                                      if (!RegExp(r'^08[0-9]{8,11}$').hasMatch(v.trim())) return 'Format nomor HP tidak valid';
+                                      return null;
+                                    },
+                                  ),
+                                  const SizedBox(height: 20),
+
+                                  _buildLabel('NIK (16 digit)'),
+                                  const SizedBox(height: 8),
+                                  _buildTextField(
+                                    controller: _nikController,
+                                    hint: '3578XXXXXXXXXXXX',
+                                    icon: Icons.credit_card_outlined,
+                                    keyboardType: TextInputType.number,
+                                    validator: (v) {
+                                      if (v == null || v.trim().isEmpty) return 'NIK tidak boleh kosong';
+                                      if (v.trim().length != 16) return 'NIK harus 16 digit';
+                                      return null;
+                                    },
+                                  ),
+                                  const SizedBox(height: 20),
+
+                                  _buildLabel('Cabang Terdekat'),
+                                  const SizedBox(height: 8),
+                                  _branches.isEmpty
+                                      ? const Center(child: SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2)))
+                                      : DropdownButtonFormField<String>(
+                                          value: _selectedBranchId,
+                                          style: const TextStyle(color: Color(0xFF0F172A), fontSize: 15),
+                                          decoration: InputDecoration(
+                                            prefixIcon: const Icon(Icons.location_on_outlined, color: Color(0xFF64748B), size: 20),
+                                            filled: true,
+                                            fillColor: const Color(0xFFF8FAFC),
+                                            contentPadding: const EdgeInsets.symmetric(vertical: 16, horizontal: 16),
+                                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
+                                            enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
+                                            focusedBorder: OutlineInputBorder(
+                                              borderRadius: BorderRadius.circular(12),
+                                              borderSide: const BorderSide(color: Color(0xFF1953A6), width: 1.5),
+                                            ),
+                                            errorBorder: OutlineInputBorder(
+                                              borderRadius: BorderRadius.circular(12),
+                                              borderSide: const BorderSide(color: Colors.red, width: 1),
+                                            ),
+                                          ),
+                                          items: _branches.map((b) => DropdownMenuItem(
+                                            value: b.id,
+                                            child: Text(b.nama, style: const TextStyle(color: Color(0xFF0F172A), fontSize: 15)),
+                                          )).toList(),
+                                          onChanged: (v) => setState(() => _selectedBranchId = v),
+                                          validator: (v) => v == null ? 'Pilih cabang terdekat' : null,
+                                        ),
+                                  const SizedBox(height: 20),
+
+                                  _buildLabel('Kata Sandi'),
+                                  const SizedBox(height: 8),
+                                  _buildTextField(
+                                    controller: _passwordController,
+                                    hint: 'Minimal 6 karakter',
+                                    icon: Icons.lock_outline_rounded,
+                                    obscureText: _obscurePassword,
+                                    suffixIcon: IconButton(
+                                      icon: Icon(
+                                        _obscurePassword ? Icons.visibility_outlined : Icons.visibility_off_outlined,
+                                        color: const Color(0xFF64748B),
+                                        size: 20,
+                                      ),
+                                      onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
+                                    ),
+                                    validator: (v) {
+                                      if (v == null || v.isEmpty) return 'Kata sandi tidak boleh kosong';
+                                      if (v.length < 6) return 'Minimal 6 karakter';
+                                      return null;
+                                    },
+                                  ),
+                                  const SizedBox(height: 20),
+
+                                  _buildLabel('Konfirmasi Kata Sandi'),
+                                  const SizedBox(height: 8),
+                                  _buildTextField(
+                                    controller: _confirmPasswordController,
+                                    hint: 'Ulangi kata sandi',
+                                    icon: Icons.lock_outline_rounded,
+                                    obscureText: _obscureConfirm,
+                                    suffixIcon: IconButton(
+                                      icon: Icon(
+                                        _obscureConfirm ? Icons.visibility_outlined : Icons.visibility_off_outlined,
+                                        color: const Color(0xFF64748B),
+                                        size: 20,
+                                      ),
+                                      onPressed: () => setState(() => _obscureConfirm = !_obscureConfirm),
+                                    ),
+                                    validator: (v) {
+                                      if (v != _passwordController.text) return 'Kata sandi tidak cocok';
+                                      return null;
+                                    },
+                                  ),
+                                  const SizedBox(height: 32),
+
+                                  SizedBox(
+                                    width: double.infinity,
+                                    height: 52,
+                                    child: ElevatedButton(
+                                      onPressed: _isLoading ? null : _handleRegister,
+                                      style: ElevatedButton.styleFrom(
+                                        backgroundColor: const Color(0xFF1953A6),
+                                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                                        elevation: 0,
+                                      ),
+                                      child: _isLoading
+                                          ? const SizedBox(width: 22, height: 22, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2.5))
+                                          : const Text('Buat Akun', style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
+                                    ),
+                                  ),
+                                  const SizedBox(height: 24),
+                                  Center(
+                                    child: Row(
+                                      mainAxisAlignment: MainAxisAlignment.center,
+                                      children: [
+                                        const Text('Sudah punya akun? ', style: TextStyle(color: Color(0xFF64748B), fontSize: 14)),
+                                        GestureDetector(
+                                          onTap: () => Navigator.pop(context),
+                                          child: const Text(
+                                            'Masuk',
+                                            style: TextStyle(color: Color(0xFF1953A6), fontWeight: FontWeight.bold, fontSize: 14),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ],
+                              ),
                             ),
                           ),
-                          const SizedBox(height: 6),
-                          Text(
-                            'Buat akun untuk mulai mengajukan gadai',
-                            style: TextStyle(
-                              color: Colors.white.withValues(alpha: 0.8),
-                              fontSize: 14,
-                            ),
-                          ),
+                          const Spacer(),
+                          const SizedBox(height: 24),
                         ],
                       ),
                     ),
-
-                    // Form Card
-                    Expanded(
-                      child: Container(
-                        width: double.infinity,
-                        decoration: const BoxDecoration(
-                          color: Colors.white,
-                          borderRadius: BorderRadius.only(
-                            topLeft: Radius.circular(32),
-                            topRight: Radius.circular(32),
-                          ),
-                        ),
-                        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
-                        child: Form(
-                          key: _formKey,
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              _buildLabel('Nama Lengkap'),
-                              const SizedBox(height: 8),
-                              _buildTextField(
-                                controller: _nameController,
-                                hint: 'Sesuai KTP',
-                                icon: Icons.badge_outlined,
-                                validator: (v) => v == null || v.trim().isEmpty ? 'Nama tidak boleh kosong' : null,
-                              ),
-                              const SizedBox(height: 20),
-                              _buildLabel('Nomor HP (untuk login)'),
-                              const SizedBox(height: 8),
-                              _buildTextField(
-                                controller: _phoneController,
-                                hint: '08xxxxxxxxxx',
-                                icon: Icons.phone_outlined,
-                                keyboardType: TextInputType.phone,
-                                validator: (v) {
-                                  if (v == null || v.trim().isEmpty) return 'Nomor HP tidak boleh kosong';
-                                  if (!RegExp(r'^08[0-9]{8,11}$').hasMatch(v.trim())) return 'Format nomor HP tidak valid';
-                                  return null;
-                                },
-                              ),
-                              const SizedBox(height: 20),
-                              _buildLabel('NIK (16 digit)'),
-                              const SizedBox(height: 8),
-                              _buildTextField(
-                                controller: _nikController,
-                                hint: '3578XXXXXXXXXXXX',
-                                icon: Icons.credit_card_outlined,
-                                keyboardType: TextInputType.number,
-                                validator: (v) {
-                                  if (v == null || v.trim().isEmpty) return 'NIK tidak boleh kosong';
-                                  if (v.trim().length != 16) return 'NIK harus 16 digit';
-                                  return null;
-                                },
-                              ),
-                              const SizedBox(height: 20),
-                              _buildLabel('Cabang Terdekat'),
-                              const SizedBox(height: 8),
-                              _branches.isEmpty
-                                  ? const Center(child: SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2)))
-                                  : DropdownButtonFormField<String>(
-                                      value: _selectedBranchId,
-                                      decoration: InputDecoration(
-                                        prefixIcon: const Icon(Icons.location_on_outlined, color: AppColors.textMuted, size: 22),
-                                        filled: true,
-                                        fillColor: AppColors.inputBackground,
-                                        contentPadding: const EdgeInsets.symmetric(vertical: 16, horizontal: 16),
-                                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
-                                        focusedBorder: OutlineInputBorder(
-                                          borderRadius: BorderRadius.circular(12),
-                                          borderSide: const BorderSide(color: AppColors.inputFocusedBorder, width: 1.5),
-                                        ),
-                                        errorBorder: OutlineInputBorder(
-                                          borderRadius: BorderRadius.circular(12),
-                                          borderSide: const BorderSide(color: Colors.red, width: 1),
-                                        ),
-                                      ),
-                                      items: _branches.map((b) => DropdownMenuItem(
-                                        value: b.id,
-                                        child: Text(b.nama, style: const TextStyle(color: AppColors.textDark, fontSize: 15)),
-                                      )).toList(),
-                                      onChanged: (v) => setState(() => _selectedBranchId = v),
-                                      validator: (v) => v == null ? 'Pilih cabang terdekat' : null,
-                                    ),
-
-                              const SizedBox(height: 8),
-                              _buildTextField(
-                                controller: _passwordController,
-                                hint: 'Minimal 6 karakter',
-                                icon: Icons.lock_outline_rounded,
-                                obscureText: _obscurePassword,
-                                suffixIcon: IconButton(
-                                  icon: Icon(
-                                    _obscurePassword ? Icons.visibility_outlined : Icons.visibility_off_outlined,
-                                    color: AppColors.textMuted,
-                                    size: 20,
-                                  ),
-                                  onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
-                                ),
-                                validator: (v) {
-                                  if (v == null || v.isEmpty) return 'Kata sandi tidak boleh kosong';
-                                  if (v.length < 6) return 'Minimal 6 karakter';
-                                  return null;
-                                },
-                              ),
-                              const SizedBox(height: 20),
-                              _buildLabel('Konfirmasi Kata Sandi'),
-                              const SizedBox(height: 8),
-                              _buildTextField(
-                                controller: _confirmPasswordController,
-                                hint: 'Ulangi kata sandi',
-                                icon: Icons.lock_outline_rounded,
-                                obscureText: _obscureConfirm,
-                                suffixIcon: IconButton(
-                                  icon: Icon(
-                                    _obscureConfirm ? Icons.visibility_outlined : Icons.visibility_off_outlined,
-                                    color: AppColors.textMuted,
-                                    size: 20,
-                                  ),
-                                  onPressed: () => setState(() => _obscureConfirm = !_obscureConfirm),
-                                ),
-                                validator: (v) {
-                                  if (v != _passwordController.text) return 'Kata sandi tidak cocok';
-                                  return null;
-                                },
-                              ),
-                              const SizedBox(height: 32),
-                              SizedBox(
-                                width: double.infinity,
-                                height: 52,
-                                child: ElevatedButton(
-                                  onPressed: _isLoading ? null : _handleRegister,
-                                  style: ElevatedButton.styleFrom(
-                                    backgroundColor: AppColors.primary,
-                                    shape: RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.circular(12),
-                                    ),
-                                    elevation: 0,
-                                  ),
-                                  child: _isLoading
-                                      ? const SizedBox(
-                                          width: 20,
-                                          height: 20,
-                                          child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
-                                        )
-                                      : const Text(
-                                          'Buat Akun',
-                                          style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w600),
-                                        ),
-                                ),
-                              ),
-                              const SizedBox(height: 20),
-                              Center(
-                                child: Row(
-                                  mainAxisAlignment: MainAxisAlignment.center,
-                                  children: [
-                                    const Text('Sudah punya akun? ', style: TextStyle(color: AppColors.textMuted, fontSize: 14)),
-                                    GestureDetector(
-                                      onTap: () => Navigator.pop(context),
-                                      child: const Text(
-                                        'Masuk',
-                                        style: TextStyle(color: AppColors.primary, fontWeight: FontWeight.w600, fontSize: 14),
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
+                  ),
                 ),
-              ),
-            ),
-          );
-        },
+              );
+            },
+          ),
+        ),
       ),
     );
   }
@@ -361,7 +380,7 @@ class _RegisterPageState extends State<RegisterPage> {
   Widget _buildLabel(String text) {
     return Text(
       text,
-      style: const TextStyle(color: AppColors.textInputLabel, fontSize: 14, fontWeight: FontWeight.w600),
+      style: const TextStyle(color: Color(0xFF334155), fontSize: 14, fontWeight: FontWeight.bold),
     );
   }
 
@@ -380,24 +399,100 @@ class _RegisterPageState extends State<RegisterPage> {
       obscureText: obscureText,
       decoration: InputDecoration(
         hintText: hint,
-        hintStyle: const TextStyle(color: AppColors.textInputHint, fontSize: 15),
-        prefixIcon: Icon(icon, color: AppColors.textMuted, size: 22),
+        hintStyle: const TextStyle(color: Color(0xFF94A3B8), fontSize: 15),
+        prefixIcon: Icon(icon, color: const Color(0xFF64748B), size: 20),
         suffixIcon: suffixIcon,
         filled: true,
-        fillColor: AppColors.inputBackground,
+        fillColor: const Color(0xFFF8FAFC),
         contentPadding: const EdgeInsets.symmetric(vertical: 16, horizontal: 16),
-        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
+        enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(color: AppColors.inputFocusedBorder, width: 1.5),
+          borderSide: const BorderSide(color: Color(0xFF1953A6), width: 1.5),
         ),
         errorBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
           borderSide: const BorderSide(color: Colors.red, width: 1),
         ),
       ),
-      style: const TextStyle(color: AppColors.textDark, fontSize: 15),
+      style: const TextStyle(color: Color(0xFF0F172A), fontSize: 15),
       validator: validator,
     );
   }
 }
+
+// ── CUSTOM BACKGROUND PAINTER ──
+class _ElegantMotifPainter extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    // Gradient Background (White to soft blue)
+    final bgPaint = Paint()
+      ..shader = const LinearGradient(
+        colors: [
+          Color(0xFFFFFFFF),
+          Color(0xFFF8FAFC),
+          Color(0xFFF1F5F9),
+        ],
+        begin: Alignment.topCenter,
+        end: Alignment.bottomCenter,
+      ).createShader(Offset.zero & size);
+    canvas.drawRect(Offset.zero & size, bgPaint);
+
+    // Subtle Grid Pattern
+    final gridPaint = Paint()
+      ..color = const Color(0xFF1953A6).withValues(alpha: 0.02)
+      ..strokeWidth = 1.0;
+    
+    for (double y = 0; y < size.height; y += 48) {
+      canvas.drawLine(Offset(0, y), Offset(size.width, y), gridPaint);
+    }
+    for (double x = 0; x < size.width; x += 48) {
+      canvas.drawLine(Offset(x, 0), Offset(x, size.height), gridPaint);
+    }
+
+    // Top Right Abstract Waves
+    final topPath = Path();
+    topPath.moveTo(size.width * 0.4, 0);
+    topPath.quadraticBezierTo(
+      size.width * 0.7,
+      size.height * 0.18,
+      size.width,
+      size.height * 0.1,
+    );
+    topPath.lineTo(size.width, 0);
+    topPath.close();
+
+    final topPaint = Paint()
+      ..shader = const LinearGradient(
+        colors: [Color(0xFF1953A6), Color(0xFF3B82F6)],
+        begin: Alignment.bottomLeft,
+        end: Alignment.topRight,
+      ).createShader(Offset(size.width * 0.4, 0) & Size(size.width * 0.6, size.height * 0.18));
+    canvas.drawPath(topPath, topPaint);
+
+    // Bottom Left Abstract Waves
+    final bottomPath = Path();
+    bottomPath.moveTo(0, size.height * 0.8);
+    bottomPath.quadraticBezierTo(
+      size.width * 0.3,
+      size.height * 0.82,
+      size.width * 0.6,
+      size.height,
+    );
+    bottomPath.lineTo(0, size.height);
+    bottomPath.close();
+
+    final bottomPaint = Paint()
+      ..shader = const LinearGradient(
+        colors: [Color(0xFF1E3A8A), Color(0xFF1953A6)],
+        begin: Alignment.topLeft,
+        end: Alignment.bottomRight,
+      ).createShader(Offset(0, size.height * 0.8) & Size(size.width * 0.6, size.height * 0.2));
+    canvas.drawPath(bottomPath, bottomPaint);
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+}
+
