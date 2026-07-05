@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:galaxi_gadai/core/constants/app_colors.dart';
 import 'package:galaxi_gadai/core/data/mock_data.dart';
 import 'package:galaxi_gadai/core/services/supabase_gadai_service.dart';
@@ -241,7 +242,7 @@ class _AdminCabangDashboardPageState extends State<AdminCabangDashboardPage> {
   Widget build(BuildContext context) {
     if (_isLoading) {
       return const Scaffold(
-        backgroundColor: Color(0xFF0F5A47),
+        backgroundColor: Color(0xFF0A1628),
         body: Center(child: CircularProgressIndicator(color: Colors.white)),
       );
     }
@@ -265,11 +266,11 @@ class _AdminCabangDashboardPageState extends State<AdminCabangDashboardPage> {
     final formattedDate = '${days[today.weekday % 7]}, ${today.day} ${months[today.month - 1]} ${today.year}';
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF8F7F0),
+      backgroundColor: AppColors.surface,
       body: SingleChildScrollView(
         child: Column(
           children: [
-            // 1. Dark Teal Top Panel
+            // 1. Navy Blue Top Panel with Geometric Motif
             Container(
               padding: EdgeInsets.only(
                 top: MediaQuery.of(context).padding.top + 16,
@@ -278,118 +279,148 @@ class _AdminCabangDashboardPageState extends State<AdminCabangDashboardPage> {
                 right: 20,
               ),
               decoration: const BoxDecoration(
-                color: Color(0xFF0F5A47), // Dark teal green color
+                gradient: LinearGradient(
+                  colors: [Color(0xFF0A1628), Color(0xFF102A4C), Color(0xFF1E3A6E)],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
               ),
-              child: Column(
+              child: Stack(
                 children: [
-                  // Top Row
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  Positioned.fill(
+                    child: CustomPaint(painter: _DashboardDotPainter()),
+                  ),
+                  Column(
                     children: [
-                      // S Logo inside rounded rect
-                      Container(
-                        width: 44,
-                        height: 44,
-                        decoration: BoxDecoration(
-                          color: const Color(0xFF137333),
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: const Center(
-                          child: Text(
-                            'S',
-                            style: TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold),
-                          ),
-                        ),
-                      ),
-                      // App title & date
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.end,
+                      // Top Row
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          const Text(
-                            'GALAXI GADAI ID-35204',
-                            style: TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.bold),
+                          // S Logo inside rounded rect
+                          Container(
+                            width: 44,
+                            height: 44,
+                            decoration: BoxDecoration(
+                              gradient: const LinearGradient(
+                                colors: [Color(0xFF2563EB), Color(0xFF1E40AF)],
+                                begin: Alignment.topLeft,
+                                end: Alignment.bottomRight,
+                              ),
+                              borderRadius: BorderRadius.circular(12),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: const Color(0xFF2563EB).withValues(alpha: 0.3),
+                                  blurRadius: 12,
+                                  offset: const Offset(0, 4),
+                                )
+                              ],
+                            ),
+                            child: Center(
+                              child: Text(
+                                widget.namaCabang.isNotEmpty ? widget.namaCabang[0].toUpperCase() : 'G',
+                                style: GoogleFonts.inter(color: Colors.white, fontSize: 22, fontWeight: FontWeight.bold),
+                              ),
+                            ),
                           ),
-                          const SizedBox(height: 2),
-                          Text(
-                            formattedDate,
-                            style: const TextStyle(color: Colors.white70, fontSize: 12),
+                          // App title & date
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.end,
+                            children: [
+                              Text(
+                                'GALAXI GADAI',
+                                style: GoogleFonts.inter(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w800, letterSpacing: 0.5),
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                formattedDate,
+                                style: GoogleFonts.inter(color: Colors.white.withValues(alpha: 0.6), fontSize: 11, fontWeight: FontWeight.w500),
+                              ),
+                            ],
                           ),
                         ],
                       ),
-                    ],
-                  ),
-                  const SizedBox(height: 24),
+                      const SizedBox(height: 24),
 
-                  // Stats Panel list (White text stats)
-                  _buildTopStatRow(Icons.monetization_on_outlined, 'Gadai Hari ini', 'Rp ${_formatCurrency(totalGadaiHariIni)}'),
-                  const SizedBox(height: 12),
-                  _buildTopStatRow(Icons.check_circle_outline_rounded, 'Ditebus Hari ini', 'Rp ${_formatCurrency(totalTebusHariIni)}'),
-                  const SizedBox(height: 12),
-                  _buildTopStatRow(Icons.people_outline_rounded, 'Total Nasabah', '$totalNasabah'),
-                  const SizedBox(height: 12),
-                  _buildTopStatRow(Icons.gavel_rounded, 'Siap Lelang', '$siapLelang'),
-                  const SizedBox(height: 24),
+                      // Stats Panel list (White text stats)
+                      _buildTopStatRow(Icons.monetization_on_outlined, 'Gadai Hari ini', 'Rp ${_formatCurrency(totalGadaiHariIni)}'),
+                      const SizedBox(height: 12),
+                      _buildTopStatRow(Icons.check_circle_outline_rounded, 'Ditebus Hari ini', 'Rp ${_formatCurrency(totalTebusHariIni)}'),
+                      const SizedBox(height: 12),
+                      _buildTopStatRow(Icons.people_outline_rounded, 'Total Nasabah', '$totalNasabah'),
+                      const SizedBox(height: 12),
+                      _buildTopStatRow(Icons.gavel_rounded, 'Siap Lelang', '$siapLelang'),
+                      const SizedBox(height: 24),
 
-                  // 2. Saldo Tenant Card (Bright Green)
-                  Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.all(20),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF2E7D32), // Bright premium green
-                      borderRadius: BorderRadius.circular(20),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Row(
+                      // 2. Saldo Tenant Card (Glassmorphic Blue Accent)
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.all(20),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withValues(alpha: 0.08),
+                          borderRadius: BorderRadius.circular(20),
+                          border: Border.all(color: Colors.white.withValues(alpha: 0.15)),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withValues(alpha: 0.1),
+                              blurRadius: 16,
+                              offset: const Offset(0, 8),
+                            )
+                          ],
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Icon(Icons.wallet_rounded, color: Colors.white, size: 20),
-                            SizedBox(width: 8),
+                            Row(
+                              children: [
+                                const Icon(Icons.wallet_rounded, color: Color(0xFF93C5FD), size: 18),
+                                const SizedBox(width: 8),
+                                Text(
+                                  'Saldo Tenant',
+                                  style: GoogleFonts.inter(color: Colors.white.withValues(alpha: 0.7), fontSize: 12, fontWeight: FontWeight.w600),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 8),
                             Text(
-                              'Saldo Tenant',
-                              style: TextStyle(color: Colors.white70, fontSize: 13, fontWeight: FontWeight.w500),
+                              'Rp ${_formatCurrency(_walletBalance)}',
+                              style: GoogleFonts.inter(color: Colors.white, fontSize: 26, fontWeight: FontWeight.w800, letterSpacing: -0.5),
+                            ),
+                            const SizedBox(height: 18),
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: TextButton.icon(
+                                    onPressed: _showTopUpDialog,
+                                    icon: const Icon(Icons.add_rounded, color: Colors.white, size: 16),
+                                    label: Text('TopUp', style: GoogleFonts.inter(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 13)),
+                                    style: TextButton.styleFrom(
+                                      backgroundColor: AppColors.royalBlue,
+                                      padding: const EdgeInsets.symmetric(vertical: 11),
+                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: TextButton.icon(
+                                    onPressed: () {
+                                      Navigator.push(context, MaterialPageRoute(builder: (_) => MutasiSaldoPage(branchId: widget.cabangId)));
+                                    },
+                                    icon: const Icon(Icons.list_alt_rounded, color: Colors.white, size: 16),
+                                    label: Text('Mutasi', style: GoogleFonts.inter(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 13)),
+                                    style: TextButton.styleFrom(
+                                      backgroundColor: Colors.white.withValues(alpha: 0.15),
+                                      padding: const EdgeInsets.symmetric(vertical: 11),
+                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                    ),
+                                  ),
+                                ),
+                              ],
                             ),
                           ],
                         ),
-                        const SizedBox(height: 8),
-                        Text(
-                          'Rp ${_formatCurrency(_walletBalance)}',
-                          style: const TextStyle(color: Colors.white, fontSize: 26, fontWeight: FontWeight.bold),
-                        ),
-                        const SizedBox(height: 16),
-                        Row(
-                          children: [
-                            Expanded(
-                              child: TextButton.icon(
-                                onPressed: _showTopUpDialog,
-                                icon: const Icon(Icons.add, color: Colors.white, size: 16),
-                                label: const Text('TopUp', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13)),
-                                style: TextButton.styleFrom(
-                                  backgroundColor: Colors.white.withValues(alpha: 0.15),
-                                  padding: const EdgeInsets.symmetric(vertical: 10),
-                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                                ),
-                              ),
-                            ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: TextButton.icon(
-                                onPressed: () {
-                                  Navigator.push(context, MaterialPageRoute(builder: (_) => MutasiSaldoPage(branchId: widget.cabangId)));
-                                },
-                                icon: const Icon(Icons.list_alt_rounded, color: Colors.white, size: 16),
-                                label: const Text('Mutasi', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13)),
-                                style: TextButton.styleFrom(
-                                  backgroundColor: Colors.white.withValues(alpha: 0.15),
-                                  padding: const EdgeInsets.symmetric(vertical: 10),
-                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
+                      ),
+                    ],
                   ),
                 ],
               ),
@@ -401,26 +432,37 @@ class _AdminCabangDashboardPageState extends State<AdminCabangDashboardPage> {
               child: Row(
                 children: [
                   Expanded(
-                    child: TextField(
-                      controller: _searchController,
-                      style: const TextStyle(color: AppColors.textDark),
-                      decoration: InputDecoration(
-                        hintText: 'Cari nama nasabah, nomor kontrak, r...',
-                        hintStyle: TextStyle(color: Colors.grey.shade400, fontSize: 13),
-                        filled: true,
-                        fillColor: Colors.white,
-                        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(10),
-                          borderSide: BorderSide(color: Colors.grey.shade300),
-                        ),
-                        enabledBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(10),
-                          borderSide: BorderSide(color: Colors.grey.shade300),
-                        ),
-                        focusedBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(10),
-                          borderSide: const BorderSide(color: Color(0xFF0F5A47), width: 1.5),
+                    child: Container(
+                      decoration: BoxDecoration(
+                        boxShadow: [
+                          BoxShadow(
+                            color: const Color(0xFF0A1628).withValues(alpha: 0.04),
+                            blurRadius: 12,
+                            offset: const Offset(0, 4),
+                          )
+                        ],
+                      ),
+                      child: TextField(
+                        controller: _searchController,
+                        style: GoogleFonts.inter(color: AppColors.textDark, fontSize: 14),
+                        decoration: InputDecoration(
+                          hintText: 'Cari nama nasabah atau nomor kontrak...',
+                          hintStyle: GoogleFonts.inter(color: Colors.grey.shade400, fontSize: 13),
+                          filled: true,
+                          fillColor: Colors.white,
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                            borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
+                          ),
+                          enabledBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                            borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
+                          ),
+                          focusedBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                            borderSide: const BorderSide(color: AppColors.royalBlue, width: 1.5),
+                          ),
                         ),
                       ),
                     ),
@@ -431,11 +473,12 @@ class _AdminCabangDashboardPageState extends State<AdminCabangDashboardPage> {
                     child: ElevatedButton(
                       onPressed: _handleSearch,
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF0F5A47),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                        backgroundColor: AppColors.royalBlue,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                         elevation: 0,
+                        padding: const EdgeInsets.symmetric(horizontal: 20),
                       ),
-                      child: const Text('Cari', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                      child: Text('Cari', style: GoogleFonts.inter(color: Colors.white, fontWeight: FontWeight.bold)),
                     ),
                   ),
                 ],
@@ -448,13 +491,13 @@ class _AdminCabangDashboardPageState extends State<AdminCabangDashboardPage> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Row(
+                  Row(
                     children: [
-                      Icon(Icons.balance_rounded, color: Color(0xFF0F5A47), size: 24),
-                      SizedBox(width: 8),
+                      const Icon(Icons.balance_rounded, color: AppColors.royalBlue, size: 22),
+                      const SizedBox(width: 8),
                       Text(
                         'Pegadaian',
-                        style: TextStyle(color: Color(0xFF0F5A47), fontSize: 18, fontWeight: FontWeight.bold),
+                        style: GoogleFonts.inter(color: AppColors.textDark, fontSize: 16, fontWeight: FontWeight.w800),
                       ),
                     ],
                   ),
@@ -505,7 +548,7 @@ class _AdminCabangDashboardPageState extends State<AdminCabangDashboardPage> {
                       }),
                     ],
                   ),
-                  const SizedBox(height: 16),
+                  const SizedBox(height: 24),
 
                   // WhatsApp Group button in its own card
                   GestureDetector(
@@ -519,12 +562,16 @@ class _AdminCabangDashboardPageState extends State<AdminCabangDashboardPage> {
                             width: 68,
                             height: 68,
                             decoration: BoxDecoration(
-                              color: const Color(0xFF137333), // WhatsApp Green
-                              borderRadius: BorderRadius.circular(16),
+                              gradient: const LinearGradient(
+                                colors: [Color(0xFF10B981), Color(0xFF059669)],
+                                begin: Alignment.topLeft,
+                                end: Alignment.bottomRight,
+                              ),
+                              borderRadius: BorderRadius.circular(18),
                               boxShadow: [
                                 BoxShadow(
-                                  color: Colors.black.withValues(alpha: 0.05),
-                                  blurRadius: 8,
+                                  color: const Color(0xFF10B981).withValues(alpha: 0.25),
+                                  blurRadius: 10,
                                   offset: const Offset(0, 4),
                                 )
                               ],
@@ -534,10 +581,10 @@ class _AdminCabangDashboardPageState extends State<AdminCabangDashboardPage> {
                             ),
                           ),
                           const SizedBox(height: 6),
-                          const Text(
+                          Text(
                             'Gabung Group Tenant',
                             textAlign: TextAlign.center,
-                            style: TextStyle(fontSize: 11, color: AppColors.textDark, fontWeight: FontWeight.w600, height: 1.2),
+                            style: GoogleFonts.inter(fontSize: 11, color: AppColors.textDark, fontWeight: FontWeight.w600, height: 1.2),
                           ),
                         ],
                       ),
@@ -550,8 +597,9 @@ class _AdminCabangDashboardPageState extends State<AdminCabangDashboardPage> {
         ),
       ),
       appBar: AppBar(
-        backgroundColor: const Color(0xFF0F5A47),
+        backgroundColor: const Color(0xFF0A1628),
         elevation: 0,
+        iconTheme: const IconThemeData(color: Colors.white),
         actions: [
           IconButton(
             icon: const Icon(Icons.logout_rounded, color: Colors.white),
@@ -568,17 +616,17 @@ class _AdminCabangDashboardPageState extends State<AdminCabangDashboardPage> {
       children: [
         Row(
           children: [
-            Icon(icon, color: Colors.white70, size: 20),
+            Icon(icon, color: Colors.white70, size: 18),
             const SizedBox(width: 8),
             Text(
               label,
-              style: const TextStyle(color: Colors.white70, fontSize: 14),
+              style: GoogleFonts.inter(color: Colors.white70, fontSize: 13, fontWeight: FontWeight.w500),
             ),
           ],
         ),
         Text(
           value,
-          style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
+          style: GoogleFonts.inter(color: Colors.white, fontSize: 15, fontWeight: FontWeight.bold),
         ),
       ],
     );
@@ -594,28 +642,45 @@ class _AdminCabangDashboardPageState extends State<AdminCabangDashboardPage> {
             height: 68,
             decoration: BoxDecoration(
               color: Colors.white,
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: Colors.grey.shade200),
+              borderRadius: BorderRadius.circular(18),
+              border: Border.all(color: const Color(0xFFE2E8F0)),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.03),
-                  blurRadius: 8,
+                  color: const Color(0xFF0A1628).withValues(alpha: 0.03),
+                  blurRadius: 10,
                   offset: const Offset(0, 4),
                 )
               ],
             ),
             child: Center(
-              child: Icon(icon, color: const Color(0xFF0F5A47), size: 28),
+              child: Icon(icon, color: AppColors.royalBlue, size: 26),
             ),
           ),
           const SizedBox(height: 6),
           Text(
             label,
             textAlign: TextAlign.center,
-            style: const TextStyle(fontSize: 11, color: AppColors.textDark, fontWeight: FontWeight.w600, height: 1.2),
+            style: GoogleFonts.inter(fontSize: 11, color: AppColors.textDark, fontWeight: FontWeight.w600, height: 1.2),
           ),
         ],
       ),
     );
   }
 }
+
+// ── Dashboard Dot Painter ──
+class _DashboardDotPainter extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()..color = const Color(0xFFFFFFFF).withValues(alpha: 0.05);
+    const spacing = 20.0;
+    for (double y = spacing; y < size.height; y += spacing) {
+      for (double x = spacing; x < size.width; x += spacing) {
+        canvas.drawCircle(Offset(x, y), 1.5, paint);
+      }
+    }
+  }
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+}
+

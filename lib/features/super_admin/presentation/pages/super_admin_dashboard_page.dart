@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:galaxi_gadai/core/constants/app_colors.dart';
 import 'package:galaxi_gadai/core/data/mock_data.dart';
 import 'package:galaxi_gadai/core/services/supabase_gadai_service.dart';
@@ -996,7 +997,7 @@ class _SuperAdminDashboardPageState extends State<SuperAdminDashboardPage> {
 
     Widget body;
     if (_isLoading) {
-      body = const Center(child: CircularProgressIndicator());
+      body = const Center(child: CircularProgressIndicator(color: AppColors.royalBlue));
     } else {
       switch (_currentIndex) {
         case 0: body = _buildOverview(); break;
@@ -1010,32 +1011,70 @@ class _SuperAdminDashboardPageState extends State<SuperAdminDashboardPage> {
     }
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF8F8F8),
+      backgroundColor: AppColors.surface,
       body: Column(
         children: [
+          // ── Navy Premium Header ──
           Container(
             padding: EdgeInsets.only(top: statusBarHeight + 16, bottom: 20, left: 20, right: 20),
-            decoration: const BoxDecoration(gradient: LinearGradient(colors: [Color(0xFF7F1D1D), Color(0xFFDC2626), Color(0xFFEF4444)], begin: Alignment.topLeft, end: Alignment.bottomRight)),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            decoration: const BoxDecoration(
+              gradient: LinearGradient(
+                colors: [Color(0xFF0A1628), Color(0xFF102A4C), Color(0xFF1E3A6E)],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+            ),
+            child: Stack(
               children: [
-                Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  Row(children: [
-                    const Icon(Icons.admin_panel_settings_rounded, color: Colors.white, size: 16),
-                    const SizedBox(width: 6),
-                    Text('Super Admin HQ', style: TextStyle(color: Colors.white.withValues(alpha: 0.85), fontSize: 12, fontWeight: FontWeight.w500)),
-                  ]),
-                  const SizedBox(height: 4),
-                  const Text('Galaxi Gadai Pusat', style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
-                  Text('${_branches.length} Cabang Terdaftar', style: TextStyle(color: Colors.white.withValues(alpha: 0.8), fontSize: 13)),
-                ]),
-                GestureDetector(
-                  onTap: _logout,
-                  child: Container(width: 40, height: 40, decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.2), shape: BoxShape.circle), child: const Icon(Icons.logout_rounded, color: Colors.white, size: 20)),
+                // Dot motif overlay
+                Positioned.fill(
+                  child: CustomPaint(painter: _HeaderDotPainter()),
+                ),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                      Row(children: [
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                          decoration: BoxDecoration(
+                            color: Colors.white.withValues(alpha: 0.12),
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: Row(children: [
+                            const Icon(Icons.admin_panel_settings_rounded, color: Color(0xFF93C5FD), size: 12),
+                            const SizedBox(width: 5),
+                            Text('Super Admin HQ',
+                              style: GoogleFonts.inter(color: const Color(0xFF93C5FD), fontSize: 11, fontWeight: FontWeight.w600)),
+                          ]),
+                        ),
+                      ]),
+                      const SizedBox(height: 8),
+                      Text('Galaxi Gadai Pusat',
+                        style: GoogleFonts.inter(color: Colors.white, fontSize: 20, fontWeight: FontWeight.w800, letterSpacing: -0.3)),
+                      const SizedBox(height: 2),
+                      Text('${_branches.length} Cabang Terdaftar',
+                        style: GoogleFonts.inter(color: Colors.white.withValues(alpha: 0.6), fontSize: 13, fontWeight: FontWeight.w400)),
+                    ]),
+                    GestureDetector(
+                      onTap: _logout,
+                      child: Container(
+                        width: 42, height: 42,
+                        decoration: BoxDecoration(
+                          color: Colors.white.withValues(alpha: 0.1),
+                          shape: BoxShape.circle,
+                          border: Border.all(color: Colors.white.withValues(alpha: 0.2)),
+                        ),
+                        child: const Icon(Icons.logout_rounded, color: Colors.white, size: 20),
+                      ),
+                    ),
+                  ],
                 ),
               ],
             ),
           ),
+
+          // ── Tab Bar ──
           Container(
             color: Colors.white,
             child: Row(
@@ -1045,12 +1084,23 @@ class _SuperAdminDashboardPageState extends State<SuperAdminDashboardPage> {
                   child: GestureDetector(
                     onTap: () => setState(() { _currentIndex = i; if (i != 1) _selectedCabangId = null; }),
                     child: Container(
-                      padding: const EdgeInsets.symmetric(vertical: 12),
-                      decoration: BoxDecoration(border: Border(bottom: BorderSide(color: isSelected ? const Color(0xFFEF4444) : Colors.transparent, width: 2.5))),
+                      padding: const EdgeInsets.symmetric(vertical: 11),
+                      decoration: BoxDecoration(
+                        border: Border(bottom: BorderSide(
+                          color: isSelected ? AppColors.royalBlue : Colors.transparent,
+                          width: 2.5,
+                        )),
+                      ),
                       child: Column(mainAxisSize: MainAxisSize.min, children: [
-                        Icon(icons[i], size: 18, color: isSelected ? const Color(0xFFEF4444) : AppColors.textMuted),
+                        Icon(icons[i], size: 17,
+                          color: isSelected ? AppColors.royalBlue : AppColors.textMuted),
                         const SizedBox(height: 3),
-                        Text(tabs[i], style: TextStyle(color: isSelected ? const Color(0xFFEF4444) : AppColors.textMuted, fontSize: 11, fontWeight: isSelected ? FontWeight.bold : FontWeight.w500)),
+                        Text(tabs[i],
+                          style: GoogleFonts.inter(
+                            color: isSelected ? AppColors.royalBlue : AppColors.textMuted,
+                            fontSize: 10,
+                            fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+                          )),
                       ]),
                     ),
                   ),
@@ -1073,45 +1123,94 @@ class _SuperAdminDashboardPageState extends State<SuperAdminDashboardPage> {
     final totalLunas = _allTx.where((t) => t.status == 'Lunas').length;
 
     return RefreshIndicator(
+      color: AppColors.royalBlue,
       onRefresh: _loadData,
       child: SingleChildScrollView(
         physics: const AlwaysScrollableScrollPhysics(),
         padding: const EdgeInsets.all(20),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+
+          // ── KPI Cards ──
           Row(children: [
-            Expanded(child: _kpiCard('Total Cabang', '${_branches.length}', Icons.store_mall_directory_outlined, const Color(0xFF7C3AED))),
+            Expanded(child: _kpiCard('Total Cabang', '${_branches.length}', Icons.store_mall_directory_outlined, AppColors.violet)),
             const SizedBox(width: 12),
-            Expanded(child: _kpiCard('Transaksi Aktif', '$totalAktif', Icons.receipt_long_outlined, AppColors.primary)),
+            Expanded(child: _kpiCard('Transaksi Aktif', '$totalAktif', Icons.receipt_long_outlined, AppColors.royalBlue)),
           ]),
           const SizedBox(height: 12),
           Row(children: [
-            Expanded(child: _kpiCard('Kasus Macet', '$totalMacet', Icons.warning_amber_rounded, const Color(0xFFEF4444))),
+            Expanded(child: _kpiCard('Kasus Macet', '$totalMacet', Icons.warning_amber_rounded, AppColors.coral)),
             const SizedBox(width: 12),
-            Expanded(child: _kpiCard('Total Nasabah', '${_allCustomers.length}', Icons.people_outline_rounded, const Color(0xFF10B981))),
+            Expanded(child: _kpiCard('Total Nasabah', '${_allCustomers.length}', Icons.people_outline_rounded, AppColors.emerald)),
           ]),
           const SizedBox(height: 20),
+
+          // ── Financial Summary Card (Navy Glassmorphism) ──
           Container(
-            width: double.infinity, padding: const EdgeInsets.all(20),
-            decoration: BoxDecoration(gradient: const LinearGradient(colors: [Color(0xFF7F1D1D), Color(0xFFEF4444)], begin: Alignment.topLeft, end: Alignment.bottomRight), borderRadius: BorderRadius.circular(16)),
+            width: double.infinity,
+            padding: const EdgeInsets.all(22),
+            decoration: BoxDecoration(
+              gradient: const LinearGradient(
+                colors: [Color(0xFF0A1628), Color(0xFF102A4C)],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+              borderRadius: BorderRadius.circular(20),
+              boxShadow: [
+                BoxShadow(
+                  color: const Color(0xFF0A1628).withValues(alpha: 0.35),
+                  blurRadius: 24,
+                  offset: const Offset(0, 10),
+                ),
+              ],
+            ),
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              const Text('💰 Total Pinjaman Beredar', style: TextStyle(color: Colors.white70, fontSize: 12)),
-              const SizedBox(height: 6),
-              Text('Rp ${_formatCurrency(totalPinjaman)}', style: const TextStyle(color: Colors.white, fontSize: 26, fontWeight: FontWeight.bold)),
-              const Padding(padding: EdgeInsets.symmetric(vertical: 12), child: Divider(color: Colors.white24)),
+              Row(children: [
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: AppColors.royalBlue.withValues(alpha: 0.25),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: const Icon(Icons.account_balance_wallet_rounded, color: Color(0xFF93C5FD), size: 18),
+                ),
+                const SizedBox(width: 10),
+                Text('Total Pinjaman Beredar',
+                  style: GoogleFonts.inter(color: Colors.white.withValues(alpha: 0.7), fontSize: 13, fontWeight: FontWeight.w500)),
+              ]),
+              const SizedBox(height: 12),
+              Text('Rp ${_formatCurrency(totalPinjaman)}',
+                style: GoogleFonts.inter(color: Colors.white, fontSize: 28, fontWeight: FontWeight.w800, letterSpacing: -0.5)),
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                child: Container(height: 1, color: Colors.white.withValues(alpha: 0.12)),
+              ),
               Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
                 Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  const Text('Est. Pendapatan/Bulan', style: TextStyle(color: Colors.white60, fontSize: 11)),
-                  Text('Rp ${_formatCurrency(totalJasa * 30)}', style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.bold)),
+                  Text('Est. Pendapatan/Bulan',
+                    style: GoogleFonts.inter(color: Colors.white.withValues(alpha: 0.55), fontSize: 11, fontWeight: FontWeight.w500)),
+                  const SizedBox(height: 3),
+                  Text('Rp ${_formatCurrency(totalJasa * 30)}',
+                    style: GoogleFonts.inter(color: Colors.white, fontSize: 15, fontWeight: FontWeight.w700)),
                 ]),
                 Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
-                  const Text('Total Transaksi', style: TextStyle(color: Colors.white60, fontSize: 11)),
-                  Text('${_allTx.length} TX ($totalLunas Lunas)', style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.bold)),
+                  Text('Total Transaksi',
+                    style: GoogleFonts.inter(color: Colors.white.withValues(alpha: 0.55), fontSize: 11, fontWeight: FontWeight.w500)),
+                  const SizedBox(height: 3),
+                  Text('${_allTx.length} TX ($totalLunas Lunas)',
+                    style: GoogleFonts.inter(color: Colors.white, fontSize: 15, fontWeight: FontWeight.w700)),
                 ]),
               ]),
             ]),
           ),
-          const SizedBox(height: 20),
-          const Text('📊 Performa Cabang', style: TextStyle(color: AppColors.textDark, fontSize: 15, fontWeight: FontWeight.bold)),
+          const SizedBox(height: 24),
+
+          // ── Branch Performance ──
+          Row(children: [
+            const Icon(Icons.bar_chart_rounded, color: AppColors.royalBlue, size: 20),
+            const SizedBox(width: 8),
+            Text('Performa Cabang',
+              style: GoogleFonts.inter(color: AppColors.textDark, fontSize: 15, fontWeight: FontWeight.w700)),
+          ]),
           const SizedBox(height: 12),
           ..._branches.map((c) {
             final cTxs = _allTx.where((t) => t.cabangId == c.id).toList();
@@ -1121,24 +1220,49 @@ class _SuperAdminDashboardPageState extends State<SuperAdminDashboardPage> {
             return GestureDetector(
               onTap: () => setState(() { _currentIndex = 1; _selectedCabangId = c.id; }),
               child: Container(
-                margin: const EdgeInsets.only(bottom: 10), padding: const EdgeInsets.all(14),
-                decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12), border: Border.all(color: const Color(0xFFE2E8F0))),
+                margin: const EdgeInsets.only(bottom: 10),
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: const Color(0xFFE2E8F0)),
+                  boxShadow: [
+                    BoxShadow(
+                      color: const Color(0xFF0A1628).withValues(alpha: 0.04),
+                      blurRadius: 12,
+                      offset: const Offset(0, 4),
+                    ),
+                  ],
+                ),
                 child: Row(children: [
-                  Container(width: 40, height: 40, decoration: const BoxDecoration(color: Color(0xFFEFF6FF), shape: BoxShape.circle), child: const Icon(Icons.store_mall_directory_outlined, color: AppColors.primary, size: 20)),
+                  Container(
+                    width: 42, height: 42,
+                    decoration: BoxDecoration(
+                      color: AppColors.iceBlue,
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: const Icon(Icons.store_mall_directory_outlined, color: AppColors.royalBlue, size: 20),
+                  ),
                   const SizedBox(width: 12),
                   Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                    Text(c.nama, style: const TextStyle(color: AppColors.textDark, fontSize: 13, fontWeight: FontWeight.bold)),
-                    Text('$cAktif aktif • $cMacet macet', style: const TextStyle(color: AppColors.textMuted, fontSize: 12)),
+                    Text(c.nama,
+                      style: GoogleFonts.inter(color: AppColors.textDark, fontSize: 13, fontWeight: FontWeight.w700)),
+                    const SizedBox(height: 2),
+                    Row(children: [
+                      _statusBadge('$cAktif aktif', AppColors.royalBlue),
+                      const SizedBox(width: 6),
+                      if (cMacet > 0) _statusBadge('$cMacet macet', AppColors.coral),
+                    ]),
                   ])),
-                  Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
-                    Text('Rp ${_formatCurrency(cPendapatan)}', style: const TextStyle(color: AppColors.textDark, fontSize: 12, fontWeight: FontWeight.w600)),
-                  ]),
+                  Text('Rp ${_formatCurrency(cPendapatan)}',
+                    style: GoogleFonts.inter(color: AppColors.textDark, fontSize: 12, fontWeight: FontWeight.w600)),
                   const SizedBox(width: 4),
-                  const Icon(Icons.chevron_right_rounded, color: AppColors.textMuted, size: 20),
+                  const Icon(Icons.chevron_right_rounded, color: AppColors.textMuted, size: 18),
                 ]),
               ),
             );
           }),
+          const SizedBox(height: 20),
         ]),
       ),
     );
@@ -1602,7 +1726,7 @@ class _SuperAdminDashboardPageState extends State<SuperAdminDashboardPage> {
       floatingActionButton: FloatingActionButton(
         mini: true,
         onPressed: _loadData,
-        backgroundColor: const Color(0xFF0F5A47),
+        backgroundColor: AppColors.royalBlue,
         tooltip: 'Refresh Log',
         child: const Icon(Icons.refresh_rounded, color: Colors.white),
       ),
@@ -1692,7 +1816,7 @@ class _SuperAdminDashboardPageState extends State<SuperAdminDashboardPage> {
                       );
                     },
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFFEF4444),
+                      backgroundColor: AppColors.royalBlue,
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                     ),
                     child: const Text('Simpan Konfigurasi', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
@@ -1709,24 +1833,72 @@ class _SuperAdminDashboardPageState extends State<SuperAdminDashboardPage> {
   Widget _kpiCard(String label, String value, IconData icon, Color color) {
     return Container(
       padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(14), border: Border.all(color: const Color(0xFFE2E8F0))),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFF0A1628).withValues(alpha: 0.05),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
       child: Row(children: [
-        Container(width: 36, height: 36, decoration: BoxDecoration(color: color.withValues(alpha: 0.1), shape: BoxShape.circle), child: Icon(icon, color: color, size: 18)),
+        Container(
+          width: 40, height: 40,
+          decoration: BoxDecoration(
+            color: color.withValues(alpha: 0.1),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Icon(icon, color: color, size: 20),
+        ),
         const SizedBox(width: 10),
         Expanded(
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text(value, style: TextStyle(color: color, fontSize: 20, fontWeight: FontWeight.bold)),
-            Text(label, style: const TextStyle(color: AppColors.textMuted, fontSize: 10)),
+            Text(value,
+              style: GoogleFonts.inter(color: color, fontSize: 22, fontWeight: FontWeight.w800)),
+            Text(label,
+              style: GoogleFonts.inter(color: AppColors.textMuted, fontSize: 10, fontWeight: FontWeight.w500)),
           ]),
         ),
       ]),
     );
   }
 
+  Widget _statusBadge(String text, Color color) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(6),
+      ),
+      child: Text(text,
+        style: GoogleFonts.inter(color: color, fontSize: 10, fontWeight: FontWeight.w600)),
+    );
+  }
+
   Widget _miniStat(String label, String value, Color color) {
     return Column(children: [
-      Text(value, style: TextStyle(color: color, fontSize: 13, fontWeight: FontWeight.bold)),
-      Text(label, style: const TextStyle(color: AppColors.textMuted, fontSize: 10)),
+      Text(value, style: GoogleFonts.inter(color: color, fontSize: 13, fontWeight: FontWeight.w700)),
+      Text(label, style: GoogleFonts.inter(color: AppColors.textMuted, fontSize: 10, fontWeight: FontWeight.w500)),
     ]);
   }
+}
+
+// ── Header Dot Motif Painter ──
+class _HeaderDotPainter extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()..color = const Color(0xFFFFFFFF).withValues(alpha: 0.05);
+    const spacing = 20.0;
+    for (double y = spacing; y < size.height; y += spacing) {
+      for (double x = spacing; x < size.width; x += spacing) {
+        canvas.drawCircle(Offset(x, y), 1.5, paint);
+      }
+    }
+  }
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }

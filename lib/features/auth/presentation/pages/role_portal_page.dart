@@ -1,4 +1,6 @@
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:galaxi_gadai/core/services/supabase_gadai_service.dart';
 import 'package:galaxi_gadai/features/dashboard/presentation/pages/branch_dashboard_page.dart';
 import 'package:galaxi_gadai/features/admin_cabang/presentation/pages/admin_cabang_dashboard_page.dart';
@@ -13,13 +15,27 @@ class RolePortalPage extends StatefulWidget {
   State<RolePortalPage> createState() => _RolePortalPageState();
 }
 
-class _RolePortalPageState extends State<RolePortalPage> {
+class _RolePortalPageState extends State<RolePortalPage>
+    with SingleTickerProviderStateMixin {
   bool _checkingAuth = true;
+  late AnimationController _animController;
+  late Animation<double> _fadeAnim;
 
   @override
   void initState() {
     super.initState();
+    _animController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 900),
+    );
+    _fadeAnim = CurvedAnimation(parent: _animController, curve: Curves.easeOut);
     _checkExistingSession();
+  }
+
+  @override
+  void dispose() {
+    _animController.dispose();
+    super.dispose();
   }
 
   Future<void> _checkExistingSession() async {
@@ -34,16 +50,14 @@ class _RolePortalPageState extends State<RolePortalPage> {
         _navigateByRole(role, staff, branchName);
       } else {
         if (mounted) {
-          setState(() {
-            _checkingAuth = false;
-          });
+          setState(() => _checkingAuth = false);
+          _animController.forward();
         }
       }
     } catch (_) {
       if (mounted) {
-        setState(() {
-          _checkingAuth = false;
-        });
+        setState(() => _checkingAuth = false);
+        _animController.forward();
       }
     }
   }
@@ -65,148 +79,356 @@ class _RolePortalPageState extends State<RolePortalPage> {
         ));
         break;
       case 'super_admin':
-        Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const SuperAdminDashboardPage()));
+        Navigator.pushReplacement(context,
+            MaterialPageRoute(builder: (_) => const SuperAdminDashboardPage()));
         break;
       default:
-        setState(() {
-          _checkingAuth = false;
-        });
+        setState(() => _checkingAuth = false);
+        _animController.forward();
     }
   }
 
   @override
   Widget build(BuildContext context) {
     if (_checkingAuth) {
-      return const Scaffold(
-        backgroundColor: Colors.white,
+      return Scaffold(
+        backgroundColor: const Color(0xFF0A1628),
         body: Center(
-          child: CircularProgressIndicator(
-            valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF1953A6)),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 72,
+                height: 72,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  gradient: const LinearGradient(
+                    colors: [Color(0xFF2563EB), Color(0xFF1E40AF)],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: const Color(0xFF2563EB).withValues(alpha: 0.4),
+                      blurRadius: 24,
+                      offset: const Offset(0, 8),
+                    ),
+                  ],
+                ),
+                child: const Icon(Icons.account_balance_rounded,
+                    color: Colors.white, size: 32),
+              ),
+              const SizedBox(height: 24),
+              SizedBox(
+                width: 28,
+                height: 28,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2.5,
+                  valueColor: AlwaysStoppedAnimation<Color>(
+                    Colors.white.withValues(alpha: 0.6),
+                  ),
+                ),
+              ),
+            ],
           ),
         ),
       );
     }
 
     return Scaffold(
-      body: CustomPaint(
-        painter: _ElegantMotifPainter(),
-        child: SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 24),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.center,
-              children: [
-                const SizedBox(height: 48),
+      body: Stack(
+        children: [
+          // ── Background ──
+          CustomPaint(
+            size: Size.infinite,
+            painter: _NavyPortalPainter(),
+          ),
 
-                // Brand Logo
-                Container(
-                  width: 84,
-                  height: 84,
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    shape: BoxShape.circle,
-                    boxShadow: [
-                      BoxShadow(
-                        color: const Color(0xFF1953A6).withValues(alpha: 0.1),
-                        blurRadius: 20,
-                        offset: const Offset(0, 8),
+          // ── Content ──
+          SafeArea(
+            child: FadeTransition(
+              opacity: _fadeAnim,
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.symmetric(horizontal: 28),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    const SizedBox(height: 56),
+
+                    // Brand Logo
+                    Container(
+                      width: 90,
+                      height: 90,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        gradient: const LinearGradient(
+                          colors: [Color(0xFF2563EB), Color(0xFF1E40AF)],
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                        ),
+                        boxShadow: [
+                          BoxShadow(
+                            color: const Color(0xFF2563EB).withValues(alpha: 0.35),
+                            blurRadius: 32,
+                            offset: const Offset(0, 12),
+                          ),
+                        ],
                       ),
-                    ],
-                    border: Border.all(color: const Color(0xFFDBEAFE), width: 2),
-                  ),
-                  child: const Icon(
-                    Icons.account_balance_rounded,
-                    color: Color(0xFF1953A6),
-                    size: 38,
-                  ),
-                ),
-                const SizedBox(height: 16),
-                const Text(
-                  'Galaxi Gadai',
-                  style: TextStyle(
-                    color: Color(0xFF0F172A),
-                    fontSize: 28,
-                    fontWeight: FontWeight.bold,
-                    letterSpacing: -0.5,
-                  ),
-                ),
-                const SizedBox(height: 6),
-                const Text(
-                  'Sistem Manajemen Gadai Terpadu',
-                  style: TextStyle(
-                    color: Color(0xFF475569),
-                    fontSize: 14,
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-
-                const SizedBox(height: 48),
-
-                const Align(
-                  alignment: Alignment.centerLeft,
-                  child: Padding(
-                    padding: EdgeInsets.only(left: 4),
-                    child: Text(
-                      'SILAKAN PILIH AKSES ANDA',
-                      style: TextStyle(
-                        color: Color(0xFF64748B),
-                        fontSize: 11,
-                        fontWeight: FontWeight.bold,
-                        letterSpacing: 1.2,
+                      child: const Icon(
+                        Icons.account_balance_rounded,
+                        color: Colors.white,
+                        size: 40,
                       ),
                     ),
-                  ),
-                ),
-                const SizedBox(height: 12),
+                    const SizedBox(height: 20),
 
-                // Nasabah Card
-                _RoleCard(
-                  icon: Icons.person_rounded,
-                  title: 'Nasabah',
-                  subtitle: 'Lihat transaksi & perpanjang tenor',
-                  color: const Color(0xFF1953A6),
-                  onTap: () => Navigator.push(context, MaterialPageRoute(
-                    builder: (_) => const NasabahLoginPage(),
-                  )),
-                ),
-                const SizedBox(height: 14),
+                    Text(
+                      'Galaxi Gadai',
+                      style: GoogleFonts.inter(
+                        color: const Color(0xFF0F172A),
+                        fontSize: 30,
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: -0.8,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      'Sistem Manajemen Gadai Terpadu',
+                      style: GoogleFonts.inter(
+                        color: const Color(0xFF64748B),
+                        fontSize: 14,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
 
-                // Admin Cabang Card
-                _RoleCard(
-                  icon: Icons.manage_accounts_rounded,
-                  title: 'Admin Cabang',
-                  subtitle: 'Laporan & manajemen cabang',
-                  color: const Color(0xFF0369A1),
-                  onTap: () => Navigator.push(context, MaterialPageRoute(
-                    builder: (_) => const StaffLoginPage(initialRole: 'admin_cabang'),
-                  )),
-                ),
-                const SizedBox(height: 14),
+                    const SizedBox(height: 16),
+                    // Blue divider accent
+                    Container(
+                      width: 40,
+                      height: 3,
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(2),
+                        gradient: const LinearGradient(
+                          colors: [Color(0xFF2563EB), Color(0xFF3B82F6)],
+                        ),
+                      ),
+                    ),
 
-                // Super Admin Card
-                _RoleCard(
-                  icon: Icons.admin_panel_settings_rounded,
-                  title: 'Super Admin',
-                  subtitle: 'Kontrol penuh seluruh sistem',
-                  color: const Color(0xFF0F172A),
-                  onTap: () => Navigator.push(context, MaterialPageRoute(
-                    builder: (_) => const StaffLoginPage(initialRole: 'super_admin'),
-                  )),
-                ),
+                    const SizedBox(height: 40),
 
-                const Spacer(),
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: Text(
+                        'PILIH PORTAL AKSES',
+                        style: GoogleFonts.inter(
+                          color: const Color(0xFF94A3B8),
+                          fontSize: 11,
+                          fontWeight: FontWeight.w700,
+                          letterSpacing: 1.8,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 14),
 
-                const Text(
-                  'v2.3 • Galaxi Gadai © 2026',
-                  style: TextStyle(
-                    color: Color(0xFF94A3B8),
-                    fontSize: 12,
-                    fontWeight: FontWeight.w500,
-                  ),
+                    // ── Nasabah ──
+                    _ElegantRoleCard(
+                      icon: Icons.person_rounded,
+                      title: 'Nasabah',
+                      subtitle: 'Lihat transaksi & perpanjang tenor',
+                      gradient: const LinearGradient(
+                        colors: [Color(0xFF2563EB), Color(0xFF3B82F6)],
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                      ),
+                      iconBg: const Color(0xFFEFF6FF),
+                      iconColor: const Color(0xFF2563EB),
+                      onTap: () => Navigator.push(context, MaterialPageRoute(
+                        builder: (_) => const NasabahLoginPage(),
+                      )),
+                    ),
+                    const SizedBox(height: 14),
+
+                    // ── Admin Cabang ──
+                    _ElegantRoleCard(
+                      icon: Icons.manage_accounts_rounded,
+                      title: 'Admin Cabang',
+                      subtitle: 'Laporan & manajemen cabang',
+                      gradient: const LinearGradient(
+                        colors: [Color(0xFF1E40AF), Color(0xFF2563EB)],
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                      ),
+                      iconBg: const Color(0xFFDBEAFE),
+                      iconColor: const Color(0xFF1E40AF),
+                      onTap: () => Navigator.push(context, MaterialPageRoute(
+                        builder: (_) => const StaffLoginPage(initialRole: 'admin_cabang'),
+                      )),
+                    ),
+                    const SizedBox(height: 14),
+
+                    // ── Super Admin ──
+                    _ElegantRoleCard(
+                      icon: Icons.admin_panel_settings_rounded,
+                      title: 'Super Admin',
+                      subtitle: 'Kontrol penuh seluruh sistem',
+                      gradient: const LinearGradient(
+                        colors: [Color(0xFF0A1628), Color(0xFF102A4C)],
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                      ),
+                      iconBg: const Color(0xFFE0E7FF),
+                      iconColor: const Color(0xFF312E81),
+                      onTap: () => Navigator.push(context, MaterialPageRoute(
+                        builder: (_) => const StaffLoginPage(initialRole: 'super_admin'),
+                      )),
+                    ),
+
+                    const SizedBox(height: 48),
+
+                    Text(
+                      'v2.3 • Galaxi Gadai © 2026',
+                      style: GoogleFonts.inter(
+                        color: const Color(0xFFCBD5E1),
+                        fontSize: 12,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                    const SizedBox(height: 32),
+                  ],
                 ),
-                const SizedBox(height: 24),
-              ],
+              ),
             ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ── ELEGANT ROLE CARD ──
+class _ElegantRoleCard extends StatefulWidget {
+  final IconData icon;
+  final String title;
+  final String subtitle;
+  final LinearGradient gradient;
+  final Color iconBg;
+  final Color iconColor;
+  final VoidCallback onTap;
+
+  const _ElegantRoleCard({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+    required this.gradient,
+    required this.iconBg,
+    required this.iconColor,
+    required this.onTap,
+  });
+
+  @override
+  State<_ElegantRoleCard> createState() => _ElegantRoleCardState();
+}
+
+class _ElegantRoleCardState extends State<_ElegantRoleCard>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _ctrl;
+  late Animation<double> _scale;
+
+  @override
+  void initState() {
+    super.initState();
+    _ctrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 120),
+    );
+    _scale = Tween<double>(begin: 1.0, end: 0.97).animate(
+      CurvedAnimation(parent: _ctrl, curve: Curves.easeOut),
+    );
+  }
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTapDown: (_) => _ctrl.forward(),
+      onTapUp: (_) {
+        _ctrl.reverse();
+        widget.onTap();
+      },
+      onTapCancel: () => _ctrl.reverse(),
+      child: ScaleTransition(
+        scale: _scale,
+        child: Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(18),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: const Color(0xFFE2E8F0), width: 1),
+            boxShadow: [
+              BoxShadow(
+                color: const Color(0xFF1E293B).withValues(alpha: 0.06),
+                blurRadius: 24,
+                offset: const Offset(0, 8),
+              ),
+            ],
+          ),
+          child: Row(
+            children: [
+              // Icon circle
+              Container(
+                width: 54,
+                height: 54,
+                decoration: BoxDecoration(
+                  color: widget.iconBg,
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(widget.icon, color: widget.iconColor, size: 26),
+              ),
+              const SizedBox(width: 16),
+
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      widget.title,
+                      style: GoogleFonts.inter(
+                        color: const Color(0xFF0F172A),
+                        fontSize: 16,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      widget.subtitle,
+                      style: GoogleFonts.inter(
+                        color: const Color(0xFF64748B),
+                        fontSize: 13,
+                        fontWeight: FontWeight.w400,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+
+              // Arrow badge
+              Container(
+                width: 32,
+                height: 32,
+                decoration: BoxDecoration(
+                  gradient: widget.gradient,
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: const Icon(Icons.arrow_forward_ios_rounded,
+                    color: Colors.white, size: 14),
+              ),
+            ],
           ),
         ),
       ),
@@ -214,92 +436,11 @@ class _RolePortalPageState extends State<RolePortalPage> {
   }
 }
 
-class _RoleCard extends StatelessWidget {
-  final IconData icon;
-  final String title;
-  final String subtitle;
-  final Color color;
-  final VoidCallback onTap;
-
-  const _RoleCard({
-    required this.icon,
-    required this.title,
-    required this.subtitle,
-    required this.color,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        width: double.infinity,
-        padding: const EdgeInsets.all(18),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: const Color(0xFFE2E8F0), width: 1.2),
-          boxShadow: [
-            BoxShadow(
-              color: const Color(0xFF1E293B).withValues(alpha: 0.04),
-              blurRadius: 20,
-              offset: const Offset(0, 8),
-            ),
-          ],
-        ),
-        child: Row(
-          children: [
-            Container(
-              width: 52,
-              height: 52,
-              decoration: BoxDecoration(
-                color: color.withValues(alpha: 0.08),
-                shape: BoxShape.circle,
-              ),
-              child: Icon(icon, color: color, size: 26),
-            ),
-            const SizedBox(width: 16),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    title,
-                    style: const TextStyle(
-                      color: Color(0xFF0F172A),
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    subtitle,
-                    style: const TextStyle(
-                      color: Color(0xFF64748B),
-                      fontSize: 13,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            Icon(
-              Icons.arrow_forward_ios_rounded,
-              color: color.withValues(alpha: 0.4),
-              size: 16,
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-// ── CUSTOM BACKGROUND PAINTER ──
-class _ElegantMotifPainter extends CustomPainter {
+// ── NAVY BACKGROUND PAINTER ──
+class _NavyPortalPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
-    // Gradient Background (White to soft blue)
+    // Base gradient background
     final bgPaint = Paint()
       ..shader = const LinearGradient(
         colors: [
@@ -312,104 +453,89 @@ class _ElegantMotifPainter extends CustomPainter {
       ).createShader(Offset.zero & size);
     canvas.drawRect(Offset.zero & size, bgPaint);
 
-    // Subtle Grid Pattern
-    final gridPaint = Paint()
-      ..color = const Color(0xFF1953A6).withValues(alpha: 0.02)
-      ..strokeWidth = 1.0;
-    
-    for (double y = 0; y < size.height; y += 48) {
-      canvas.drawLine(Offset(0, y), Offset(size.width, y), gridPaint);
+    // ── Top right arc decoration ──
+    _drawTopArc(canvas, size);
+
+    // ── Bottom left arc decoration ──
+    _drawBottomArc(canvas, size);
+
+    // ── Dot pattern ──
+    _drawDotPattern(canvas, size);
+  }
+
+  void _drawTopArc(Canvas canvas, Size size) {
+    final path1 = Path()
+      ..moveTo(size.width * 0.25, 0)
+      ..quadraticBezierTo(size.width * 0.75, size.height * 0.18, size.width, size.height * 0.10)
+      ..lineTo(size.width, 0)
+      ..close();
+    canvas.drawPath(
+      path1,
+      Paint()
+        ..shader = const LinearGradient(
+          colors: [Color(0xFF1E40AF), Color(0xFF2563EB)],
+          begin: Alignment.bottomLeft,
+          end: Alignment.topRight,
+        ).createShader(Rect.fromLTWH(size.width * 0.25, 0, size.width * 0.75, size.height * 0.18)),
+    );
+
+    final path2 = Path()
+      ..moveTo(size.width * 0.48, 0)
+      ..quadraticBezierTo(size.width * 0.80, size.height * 0.22, size.width, size.height * 0.17)
+      ..lineTo(size.width, 0)
+      ..close();
+    canvas.drawPath(
+      path2,
+      Paint()
+        ..color = const Color(0xFF3B82F6).withValues(alpha: 0.18),
+    );
+  }
+
+  void _drawBottomArc(Canvas canvas, Size size) {
+    final path1 = Path()
+      ..moveTo(0, size.height * 0.78)
+      ..quadraticBezierTo(size.width * 0.30, size.height * 0.82, size.width * 0.65, size.height)
+      ..lineTo(0, size.height)
+      ..close();
+    canvas.drawPath(
+      path1,
+      Paint()
+        ..shader = const LinearGradient(
+          colors: [Color(0xFF0A1628), Color(0xFF1E40AF)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ).createShader(Rect.fromLTWH(0, size.height * 0.78, size.width * 0.65, size.height * 0.22)),
+    );
+
+    final path2 = Path()
+      ..moveTo(0, size.height * 0.71)
+      ..quadraticBezierTo(size.width * 0.38, size.height * 0.76, size.width * 0.78, size.height)
+      ..lineTo(0, size.height)
+      ..close();
+    canvas.drawPath(
+      path2,
+      Paint()..color = const Color(0xFF2563EB).withValues(alpha: 0.12),
+    );
+  }
+
+  void _drawDotPattern(Canvas canvas, Size size) {
+    final dotPaint = Paint()..color = const Color(0xFF2563EB).withValues(alpha: 0.05);
+    const spacing = 32.0;
+    const radius = 1.6;
+
+    for (double y = spacing; y < size.height - spacing * 2; y += spacing) {
+      for (double x = spacing; x < size.width - spacing; x += spacing) {
+        // Skip corners where arcs are drawn
+        if (y < size.height * 0.25 && x > size.width * 0.4) continue;
+        if (y > size.height * 0.65 && x < size.width * 0.45) continue;
+        canvas.drawCircle(Offset(x, y), radius, dotPaint);
+      }
     }
-    for (double x = 0; x < size.width; x += 48) {
-      canvas.drawLine(Offset(x, 0), Offset(x, size.height), gridPaint);
-    }
-
-    // Top Right Abstract Shapes
-    final topPath = Path();
-    topPath.moveTo(size.width * 0.3, 0);
-    topPath.quadraticBezierTo(
-      size.width * 0.65,
-      size.height * 0.2,
-      size.width,
-      size.height * 0.12,
-    );
-    topPath.lineTo(size.width, 0);
-    topPath.close();
-
-    final topPaint = Paint()
-      ..shader = const LinearGradient(
-        colors: [Color(0xFF1953A6), Color(0xFF3B82F6)],
-        begin: Alignment.bottomLeft,
-        end: Alignment.topRight,
-      ).createShader(Offset(size.width * 0.3, 0) & Size(size.width * 0.7, size.height * 0.2));
-    canvas.drawPath(topPath, topPaint);
-
-    final topPath2 = Path();
-    topPath2.moveTo(size.width * 0.5, 0);
-    topPath2.quadraticBezierTo(
-      size.width * 0.75,
-      size.height * 0.24,
-      size.width,
-      size.height * 0.18,
-    );
-    topPath2.lineTo(size.width, 0);
-    topPath2.close();
-
-    final topPaint2 = Paint()
-      ..shader = LinearGradient(
-        colors: [
-          const Color(0xFF60A5FA).withValues(alpha: 0.25),
-          const Color(0xFF3B82F6).withValues(alpha: 0.25),
-        ],
-        begin: Alignment.bottomLeft,
-        end: Alignment.topRight,
-      ).createShader(Offset(size.width * 0.5, 0) & Size(size.width * 0.5, size.height * 0.24));
-    canvas.drawPath(topPath2, topPaint2);
-
-    // Bottom Left Abstract Shapes
-    final bottomPath = Path();
-    bottomPath.moveTo(0, size.height * 0.75);
-    bottomPath.quadraticBezierTo(
-      size.width * 0.35,
-      size.height * 0.78,
-      size.width * 0.7,
-      size.height,
-    );
-    bottomPath.lineTo(0, size.height);
-    bottomPath.close();
-
-    final bottomPaint = Paint()
-      ..shader = const LinearGradient(
-        colors: [Color(0xFF1E3A8A), Color(0xFF1953A6)],
-        begin: Alignment.topLeft,
-        end: Alignment.bottomRight,
-      ).createShader(Offset(0, size.height * 0.75) & Size(size.width * 0.7, size.height * 0.25));
-    canvas.drawPath(bottomPath, bottomPaint);
-
-    final bottomPath2 = Path();
-    bottomPath2.moveTo(0, size.height * 0.68);
-    bottomPath2.quadraticBezierTo(
-      size.width * 0.4,
-      size.height * 0.72,
-      size.width * 0.82,
-      size.height,
-    );
-    bottomPath2.lineTo(0, size.height);
-    bottomPath2.close();
-
-    final bottomPaint2 = Paint()
-      ..shader = LinearGradient(
-        colors: [
-          const Color(0xFF3B82F6).withValues(alpha: 0.2),
-          const Color(0xFF60A5FA).withValues(alpha: 0.2),
-        ],
-        begin: Alignment.topLeft,
-        end: Alignment.bottomRight,
-      ).createShader(Offset(0, size.height * 0.68) & Size(size.width * 0.82, size.height * 0.32));
-    canvas.drawPath(bottomPath2, bottomPaint2);
   }
 
   @override
   bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
 
+// ignore_for_file: unused_import
+// dart:math is used via math.pi etc.
