@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:galaxi_gadai/core/constants/app_colors.dart';
 import 'package:galaxi_gadai/core/data/mock_data.dart';
 import 'package:galaxi_gadai/core/services/supabase_gadai_service.dart';
@@ -491,19 +492,19 @@ class _NewPawnPageState extends State<NewPawnPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF6F9FC),
+      backgroundColor: const Color(0xFFF8FAFC),
       appBar: AppBar(
-        backgroundColor: Colors.white,
+        backgroundColor: const Color(0xFF93C5FD),
         elevation: 0,
         scrolledUnderElevation: 0,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back_rounded, color: AppColors.primary),
+          icon: const Icon(Icons.arrow_back_rounded, color: Color(0xFF0A1628)),
           onPressed: _handleBackNavigation,
         ),
-        title: const Text(
+        title: Text(
           'Pengajuan Gadai Baru',
-          style: TextStyle(
-            color: AppColors.primary,
+          style: GoogleFonts.poppins(
+            color: const Color(0xFF0A1628),
             fontWeight: FontWeight.bold,
             fontSize: 18,
           ),

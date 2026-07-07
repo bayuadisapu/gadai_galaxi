@@ -154,7 +154,7 @@ class _LelangPageState extends State<LelangPage> {
                 fillColor: Colors.white,
                 border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
                 enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
-                focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFF0F5A47), width: 1.5)),
+                focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFF2563EB), width: 1.5)),
                 contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
               ),
             ),
@@ -200,7 +200,7 @@ class _LelangPageState extends State<LelangPage> {
     final pageCount = (_filtered.length / 10).ceil();
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF5F7FA),
+      backgroundColor: const Color(0xFFF8FAFC),
       body: Column(
         children: [
           // ─── HEADER ───────────────────────────────────────────
@@ -209,10 +209,10 @@ class _LelangPageState extends State<LelangPage> {
           // ─── BODY ─────────────────────────────────────────────
           Expanded(
             child: _isLoading
-                ? const Center(child: CircularProgressIndicator(color: Color(0xFF0F5A47)))
+                ? const Center(child: CircularProgressIndicator(color: Color(0xFF2563EB)))
                 : RefreshIndicator(
                     onRefresh: _loadData,
-                    color: const Color(0xFF0F5A47),
+                    color: const Color(0xFF2563EB),
                     child: CustomScrollView(
                       slivers: [
                         // Info banner
@@ -261,11 +261,7 @@ class _LelangPageState extends State<LelangPage> {
   Widget _buildHeader() {
     return Container(
       decoration: const BoxDecoration(
-        gradient: LinearGradient(
-          colors: [Color(0xFF0A2A1E), Color(0xFF0F5A47), Color(0xFF1A7A60)],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
+        color: Color(0xFF93C5FD),
       ),
       child: Stack(
         children: [
@@ -285,10 +281,10 @@ class _LelangPageState extends State<LelangPage> {
                         child: Container(
                           padding: const EdgeInsets.all(8),
                           decoration: BoxDecoration(
-                            color: Colors.white.withValues(alpha: 0.15),
+                            color: const Color(0xFF0A1628).withValues(alpha: 0.1),
                             borderRadius: BorderRadius.circular(10),
                           ),
-                          child: const Icon(Icons.arrow_back_rounded, color: Colors.white, size: 20),
+                          child: const Icon(Icons.arrow_back_rounded, color: Color(0xFF0A1628), size: 20),
                         ),
                       ),
                       const Spacer(),
@@ -298,15 +294,15 @@ class _LelangPageState extends State<LelangPage> {
                         child: Container(
                           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                           decoration: BoxDecoration(
-                            color: Colors.white.withValues(alpha: 0.15),
+                            color: const Color(0xFF0A1628).withValues(alpha: 0.1),
                             borderRadius: BorderRadius.circular(20),
-                            border: Border.all(color: Colors.white.withValues(alpha: 0.3)),
+                            border: Border.all(color: const Color(0xFF0A1628).withValues(alpha: 0.2)),
                           ),
                           child: Row(
                             children: [
-                              const Icon(Icons.history_rounded, color: Colors.white, size: 13),
+                              const Icon(Icons.history_rounded, color: Color(0xFF0A1628), size: 13),
                               const SizedBox(width: 4),
-                              Text('Riwayat', style: GoogleFonts.inter(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w600)),
+                              Text('Riwayat', style: GoogleFonts.inter(color: Color(0xFF0A1628), fontSize: 11, fontWeight: FontWeight.w600)),
                             ],
                           ),
                         ),
@@ -315,17 +311,17 @@ class _LelangPageState extends State<LelangPage> {
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                         decoration: BoxDecoration(
-                          color: const Color(0xFFEF4444).withValues(alpha: 0.2),
+                          color: const Color(0xFFEF4444).withValues(alpha: 0.1),
                           borderRadius: BorderRadius.circular(20),
-                          border: Border.all(color: const Color(0xFFEF4444).withValues(alpha: 0.4)),
+                          border: Border.all(color: const Color(0xFFEF4444).withValues(alpha: 0.3)),
                         ),
                         child: Row(
                           children: [
-                            const Icon(Icons.gavel_rounded, color: Color(0xFFFF6B6B), size: 14),
+                            const Icon(Icons.gavel_rounded, color: Color(0xFFB91C1C), size: 14),
                             const SizedBox(width: 6),
                             Text(
                               '${_filtered.length} Barang',
-                              style: GoogleFonts.inter(color: const Color(0xFFFF6B6B), fontSize: 12, fontWeight: FontWeight.w700),
+                              style: GoogleFonts.inter(color: Color(0xFFB91C1C), fontSize: 12, fontWeight: FontWeight.w700),
                             ),
                           ],
                         ),
@@ -343,12 +339,12 @@ class _LelangPageState extends State<LelangPage> {
                           children: [
                             Text(
                               'Lelang Barang Gadai',
-                              style: GoogleFonts.inter(color: Colors.white, fontSize: 22, fontWeight: FontWeight.w800),
+                              style: GoogleFonts.poppins(color: const Color(0xFF0A1628), fontSize: 22, fontWeight: FontWeight.w800),
                             ),
                             const SizedBox(height: 4),
                             Text(
-                              'Kelola dan jual barang gadai yang sudah masuk masa lelang',
-                              style: GoogleFonts.inter(color: Colors.white.withValues(alpha: 0.7), fontSize: 12),
+                              'Kelola dan jual barang gadai yang sudah masa lelang',
+                              style: GoogleFonts.poppins(color: const Color(0xFF0A1628).withValues(alpha: 0.7), fontSize: 12),
                             ),
                           ],
                         ),
@@ -398,7 +394,7 @@ class _LelangPageState extends State<LelangPage> {
             label: 'Barang',
             value: '$barangCount',
             icon: Icons.inventory_2_outlined,
-            color: const Color(0xFF0F5A47),
+            color: const Color(0xFF2563EB),
           ),
           const SizedBox(width: 10),
           Expanded(
@@ -483,7 +479,7 @@ class _LelangPageState extends State<LelangPage> {
               height: 46,
               padding: const EdgeInsets.symmetric(horizontal: 18),
               decoration: BoxDecoration(
-                color: const Color(0xFF0F5A47),
+                color: const Color(0xFF2563EB),
                 borderRadius: BorderRadius.circular(10),
               ),
               child: Center(
@@ -519,10 +515,10 @@ class _LelangPageState extends State<LelangPage> {
                 Container(
                   height: 100,
                   width: double.infinity,
-                  color: const Color(0xFFF0FDF4),
+                  color: const Color(0xFFEFF6FF),
                   child: Icon(
                     _itemIcon(tx.collateralType),
-                    color: const Color(0xFF0F5A47).withValues(alpha: 0.25),
+                    color: const Color(0xFF2563EB).withValues(alpha: 0.25),
                     size: 56,
                   ),
                 ),
@@ -532,7 +528,7 @@ class _LelangPageState extends State<LelangPage> {
                   child: Container(
                     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                     decoration: BoxDecoration(
-                      color: const Color(0xFF0F5A47),
+                      color: const Color(0xFF2563EB),
                       borderRadius: BorderRadius.circular(6),
                     ),
                     child: Text('Siap Lelang', style: GoogleFonts.inter(color: Colors.white, fontSize: 9, fontWeight: FontWeight.w700)),
@@ -600,17 +596,17 @@ class _LelangPageState extends State<LelangPage> {
                       width: double.infinity,
                       padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 8),
                       decoration: BoxDecoration(
-                        color: const Color(0xFFF0FDF4),
+                        color: const Color(0xFFEFF6FF),
                         borderRadius: BorderRadius.circular(8),
-                        border: Border.all(color: const Color(0xFFBBF7D0)),
+                        border: Border.all(color: const Color(0xFFBFDBFE)),
                       ),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text('Nilai Gadai', style: GoogleFonts.inter(color: const Color(0xFF0F5A47), fontSize: 9, fontWeight: FontWeight.w500)),
+                          Text('Nilai Gadai', style: GoogleFonts.inter(color: const Color(0xFF2563EB), fontSize: 9, fontWeight: FontWeight.w500)),
                           Text(
                             'Rp\n${_formatCurrency(tx.principal)}',
-                            style: GoogleFonts.inter(color: const Color(0xFF0F5A47), fontSize: 13, fontWeight: FontWeight.w800, height: 1.2),
+                            style: GoogleFonts.inter(color: const Color(0xFF2563EB), fontSize: 13, fontWeight: FontWeight.w800, height: 1.2),
                           ),
                         ],
                       ),
@@ -651,7 +647,7 @@ class _LelangPageState extends State<LelangPage> {
                             child: Container(
                               padding: const EdgeInsets.symmetric(vertical: 7),
                               decoration: BoxDecoration(
-                                color: const Color(0xFF0F5A47),
+                                color: const Color(0xFF2563EB),
                                 borderRadius: BorderRadius.circular(8),
                               ),
                               child: Center(

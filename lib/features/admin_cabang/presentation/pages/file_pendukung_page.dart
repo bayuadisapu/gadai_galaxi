@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:galaxi_gadai/core/constants/app_colors.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -123,8 +124,8 @@ class _FilePendukungPageState extends State<FilePendukungPage> {
               const SizedBox(height: 16),
               ListTile(
                 leading: const CircleAvatar(
-                  backgroundColor: Color(0xFFE6F4EA),
-                  child: Icon(Icons.camera_alt_rounded, color: Color(0xFF137333)),
+                  backgroundColor: Color(0xFFEFF6FF),
+                  child: Icon(Icons.camera_alt_rounded, color: Color(0xFF2563EB)),
                 ),
                 title: const Text('Kamera'),
                 subtitle: const Text('Foto langsung dari kamera'),
@@ -188,15 +189,15 @@ class _FilePendukungPageState extends State<FilePendukungPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF8F7F0),
+      backgroundColor: const Color(0xFFF8FAFC),
       appBar: AppBar(
-        title: const Text('File Pendukung',
-            style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-        backgroundColor: const Color(0xFF0F5A47),
-        iconTheme: const IconThemeData(color: Colors.white),
+        title: Text('File Pendukung',
+            style: GoogleFonts.poppins(color: const Color(0xFF0A1628), fontWeight: FontWeight.bold, fontSize: 18)),
+        backgroundColor: const Color(0xFF93C5FD),
+        iconTheme: const IconThemeData(color: Color(0xFF0A1628)),
         actions: [
           IconButton(
-            icon: const Icon(Icons.refresh_rounded, color: Colors.white),
+            icon: const Icon(Icons.refresh_rounded, color: Color(0xFF0A1628)),
             onPressed: _loadUploadedFiles,
           ),
         ],
@@ -216,17 +217,17 @@ class _FilePendukungPageState extends State<FilePendukungPage> {
                       width: double.infinity,
                       padding: const EdgeInsets.all(14),
                       decoration: BoxDecoration(
-                        color: const Color(0xFFE6F4EA),
+                        color: const Color(0xFFEFF6FF),
                         borderRadius: BorderRadius.circular(12),
                       ),
                       child: const Row(
                         children: [
-                          Icon(Icons.info_outline_rounded, color: Color(0xFF137333)),
+                          Icon(Icons.info_outline_rounded, color: Color(0xFF2563EB)),
                           SizedBox(width: 12),
                           Expanded(
                             child: Text(
                               'Unggah foto fisik jaminan gadai atau unduh template surat.',
-                              style: TextStyle(color: Color(0xFF137333), fontSize: 13),
+                              style: TextStyle(color: Color(0xFF1E4ED8), fontSize: 13),
                             ),
                           ),
                         ],
@@ -277,7 +278,7 @@ class _FilePendukungPageState extends State<FilePendukungPage> {
                             child: Row(
                               children: [
                                 const Icon(Icons.image_outlined,
-                                    color: Color(0xFF0F5A47), size: 28),
+                                    color: Color(0xFF2563EB), size: 28),
                                 const SizedBox(width: 12),
                                 Expanded(
                                   child: Column(
@@ -328,7 +329,7 @@ class _FilePendukungPageState extends State<FilePendukungPage> {
                           child: Row(
                             children: [
                               const Icon(Icons.insert_drive_file_outlined,
-                                  color: Color(0xFF0F5A47), size: 28),
+                                  color: Color(0xFF2563EB), size: 28),
                               const SizedBox(width: 12),
                               Expanded(
                                 child: Column(
@@ -348,7 +349,7 @@ class _FilePendukungPageState extends State<FilePendukungPage> {
                               ),
                               IconButton(
                                 icon: const Icon(Icons.download_rounded,
-                                    color: Color(0xFF0F5A47)),
+                                    color: Color(0xFF2563EB)),
                                 onPressed: () {
                                   ScaffoldMessenger.of(context).showSnackBar(
                                     SnackBar(
@@ -368,7 +369,7 @@ class _FilePendukungPageState extends State<FilePendukungPage> {
             ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: _isUploading ? null : _showUploadDialog,
-        backgroundColor: const Color(0xFF0F5A47),
+        backgroundColor: const Color(0xFF2563EB),
         icon: const Icon(Icons.upload_file_rounded, color: Colors.white),
         label: const Text('Unggah Foto',
             style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),

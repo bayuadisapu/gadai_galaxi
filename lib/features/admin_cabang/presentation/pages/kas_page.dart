@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-
+import 'package:google_fonts/google_fonts.dart';
 import 'package:galaxi_gadai/core/constants/app_colors.dart';
 import 'package:galaxi_gadai/core/services/supabase_gadai_service.dart';
 
@@ -19,7 +19,7 @@ class _KasPageState extends State<KasPage> {
   List<Map<String, dynamic>> _mutations = [];
   bool _isLoading = true;
 
-  static const _green = Color(0xFF0F5A47);
+  static const _themeColor = Color(0xFF93C5FD);
 
   @override
   void initState() {
@@ -244,28 +244,24 @@ class _KasPageState extends State<KasPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF8F7F0),
+      backgroundColor: const Color(0xFFF8FAFC),
       body: _isLoading
           ? const Scaffold(body: Center(child: CircularProgressIndicator()))
           : RefreshIndicator(
               onRefresh: _loadData,
-              color: _green,
+              color: _themeColor,
               child: CustomScrollView(
                 slivers: [
                   // ── App Bar + Saldo Header ──
                   SliverAppBar(
                     expandedHeight: 240,
                     pinned: true,
-                    backgroundColor: _green,
-                    iconTheme: const IconThemeData(color: Colors.white),
+                    backgroundColor: _themeColor,
+                    iconTheme: const IconThemeData(color: Color(0xFF0A1628)),
                     flexibleSpace: FlexibleSpaceBar(
                       background: Container(
                         decoration: const BoxDecoration(
-                          gradient: LinearGradient(
-                            colors: [Color(0xFF0F5A47), Color(0xFF137333)],
-                            begin: Alignment.topLeft,
-                            end: Alignment.bottomRight,
-                          ),
+                          color: Color(0xFF93C5FD),
                         ),
                         child: SafeArea(
                           child: Padding(
@@ -275,19 +271,19 @@ class _KasPageState extends State<KasPage> {
                               children: [
                                 Text(
                                   'Uang Kas — ${widget.namaCabang}',
-                                  style: const TextStyle(color: Colors.white70, fontSize: 13),
+                                  style: GoogleFonts.poppins(color: const Color(0xFF0A1628), fontSize: 13, fontWeight: FontWeight.w600),
                                 ),
                                 const SizedBox(height: 6),
                                 Text(
                                   'Rp ${_fmt(_balance)}',
-                                  style: const TextStyle(color: Colors.white, fontSize: 32, fontWeight: FontWeight.bold),
+                                  style: GoogleFonts.poppins(color: const Color(0xFF0A1628), fontSize: 32, fontWeight: FontWeight.bold),
                                 ),
                                 const SizedBox(height: 16),
                                 // Ringkasan bulan ini
                                 Row(children: [
-                                  _summaryChip('↑ Masuk', _totalMasukBulanIni, const Color(0xFF10B981)),
+                                  _summaryChip('↑ Masuk', _totalMasukBulanIni, const Color(0xFF047857)),
                                   const SizedBox(width: 10),
-                                  _summaryChip('↓ Keluar', _totalKeluarBulanIni, Colors.red.shade300),
+                                  _summaryChip('↓ Keluar', _totalKeluarBulanIni, const Color(0xFFB91C1C)),
                                 ]),
                               ],
                             ),
@@ -295,9 +291,9 @@ class _KasPageState extends State<KasPage> {
                         ),
                       ),
                     ),
-                    title: const Text('Uang Kas', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                    title: Text('Uang Kas', style: GoogleFonts.poppins(color: const Color(0xFF0A1628), fontWeight: FontWeight.bold, fontSize: 18)),
                     actions: [
-                      IconButton(icon: const Icon(Icons.refresh_rounded, color: Colors.white), onPressed: _loadData),
+                      IconButton(icon: const Icon(Icons.refresh_rounded, color: Color(0xFF0A1628)), onPressed: _loadData),
                     ],
                   ),
 
@@ -414,13 +410,13 @@ class _KasPageState extends State<KasPage> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
       decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.15),
+        color: const Color(0xFF0A1628).withValues(alpha: 0.08),
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.2)),
+        border: Border.all(color: const Color(0xFF0A1628).withValues(alpha: 0.15)),
       ),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Text(label, style: TextStyle(color: color, fontSize: 10, fontWeight: FontWeight.w600)),
-        Text('Rp ${_fmt(amount)}', style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold)),
+        Text(label, style: TextStyle(color: color, fontSize: 10, fontWeight: FontWeight.w800)),
+        Text('Rp ${_fmt(amount)}', style: const TextStyle(color: Color(0xFF0A1628), fontSize: 13, fontWeight: FontWeight.bold)),
       ]),
     );
   }

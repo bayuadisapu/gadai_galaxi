@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:galaxi_gadai/core/data/mock_data.dart';
 import 'package:galaxi_gadai/core/services/supabase_gadai_service.dart';
 import 'package:galaxi_gadai/core/constants/app_colors.dart';
@@ -54,11 +55,11 @@ class _BarangListPageState extends State<BarangListPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF8F7F0),
+      backgroundColor: const Color(0xFFF8FAFC),
       appBar: AppBar(
-        title: const Text('Barang Jaminan Aktif', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-        backgroundColor: const Color(0xFF0F5A47),
-        iconTheme: const IconThemeData(color: Colors.white),
+        title: Text('Barang Jaminan Aktif', style: GoogleFonts.poppins(color: const Color(0xFF0A1628), fontWeight: FontWeight.bold, fontSize: 18)),
+        backgroundColor: const Color(0xFF93C5FD),
+        iconTheme: const IconThemeData(color: Color(0xFF0A1628)),
       ),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
@@ -89,10 +90,10 @@ class _BarangListPageState extends State<BarangListPage> {
                                 width: 44,
                                 height: 44,
                                 decoration: BoxDecoration(
-                                  color: const Color(0xFF0F5A47).withValues(alpha: 0.1),
+                                  color: const Color(0xFFEFF6FF),
                                   shape: BoxShape.circle,
                                 ),
-                                child: const Icon(Icons.inventory_2_outlined, color: Color(0xFF0F5A47), size: 22),
+                                child: const Icon(Icons.inventory_2_outlined, color: Color(0xFF2563EB), size: 22),
                               ),
                               const SizedBox(width: 14),
                               Expanded(

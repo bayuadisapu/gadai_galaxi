@@ -242,7 +242,7 @@ class _AdminCabangDashboardPageState extends State<AdminCabangDashboardPage> {
   Widget build(BuildContext context) {
     if (_isLoading) {
       return const Scaffold(
-        backgroundColor: Color(0xFF0A1628),
+        backgroundColor: Color(0xFF2563EB),
         body: Center(child: CircularProgressIndicator(color: Colors.white)),
       );
     }
@@ -266,7 +266,7 @@ class _AdminCabangDashboardPageState extends State<AdminCabangDashboardPage> {
     final formattedDate = '${days[today.weekday % 7]}, ${today.day} ${months[today.month - 1]} ${today.year}';
 
     return Scaffold(
-      backgroundColor: AppColors.surface,
+      backgroundColor: const Color(0xFFDBEAFE),
       body: SingleChildScrollView(
         child: Column(
           children: [
@@ -280,7 +280,7 @@ class _AdminCabangDashboardPageState extends State<AdminCabangDashboardPage> {
               ),
               decoration: const BoxDecoration(
                 gradient: LinearGradient(
-                  colors: [Color(0xFF0A1628), Color(0xFF102A4C), Color(0xFF1E3A6E)],
+                  colors: [Color(0xFF1E40AF), Color(0xFF2563EB), Color(0xFF3B82F6)],
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight,
                 ),
@@ -524,7 +524,7 @@ class _AdminCabangDashboardPageState extends State<AdminCabangDashboardPage> {
                       _buildGridItem('Laporan', Icons.analytics_outlined, () {
                         Navigator.push(context, MaterialPageRoute(
                           builder: (_) => Scaffold(
-                            appBar: AppBar(title: const Text('Laporan Cabang'), backgroundColor: const Color(0xFF0F5A47), iconTheme: const IconThemeData(color: Colors.white)),
+                            appBar: AppBar(title: Text('Laporan Cabang', style: GoogleFonts.poppins(color: const Color(0xFF1E3A6E), fontWeight: FontWeight.bold, fontSize: 18)), backgroundColor: const Color(0xFF93C5FD), iconTheme: const IconThemeData(color: Color(0xFF1E3A6E))),
                             body: LaporanTabContent(branchId: widget.cabangId),
                           ),
                         ));
@@ -597,7 +597,7 @@ class _AdminCabangDashboardPageState extends State<AdminCabangDashboardPage> {
         ),
       ),
       appBar: AppBar(
-        backgroundColor: const Color(0xFF0A1628),
+        backgroundColor: const Color(0xFF2563EB),
         elevation: 0,
         iconTheme: const IconThemeData(color: Colors.white),
         actions: [

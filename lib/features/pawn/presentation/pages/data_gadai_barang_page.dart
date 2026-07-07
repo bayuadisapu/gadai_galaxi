@@ -175,11 +175,11 @@ class _DataGadaiBarangPageState extends State<DataGadaiBarangPage> {
           // ── Content ──
           Expanded(
             child: _isLoading
-                ? const Center(child: CircularProgressIndicator(color: Color(0xFF0F7A6B)))
+                ? const Center(child: CircularProgressIndicator(color: Color(0xFF2563EB)))
                 : _filtered.isEmpty
                     ? _buildEmptyState()
                     : RefreshIndicator(
-                        color: const Color(0xFF0F7A6B),
+                        color: const Color(0xFF2563EB),
                         onRefresh: _loadData,
                         child: ListView.separated(
                           padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
@@ -199,11 +199,7 @@ class _DataGadaiBarangPageState extends State<DataGadaiBarangPage> {
     return Container(
       padding: EdgeInsets.only(top: statusBarHeight + 16, bottom: 20, left: 20, right: 20),
       decoration: const BoxDecoration(
-        gradient: LinearGradient(
-          colors: [Color(0xFF0D6B5E), Color(0xFF0F8A77), Color(0xFF18A896)],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
+        color: Color(0xFF93C5FD),
       ),
       child: Stack(
         children: [
@@ -221,10 +217,10 @@ class _DataGadaiBarangPageState extends State<DataGadaiBarangPage> {
                   height: 40,
                   margin: const EdgeInsets.only(right: 10),
                   decoration: BoxDecoration(
-                    color: Colors.white.withValues(alpha: 0.2),
+                    color: const Color(0xFF0A1628).withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(10),
                   ),
-                  child: const Icon(Icons.arrow_back_rounded, color: Colors.white, size: 20),
+                  child: const Icon(Icons.arrow_back_rounded, color: Color(0xFF0A1628), size: 20),
                 ),
               ),
               // Logo / icon
@@ -232,10 +228,10 @@ class _DataGadaiBarangPageState extends State<DataGadaiBarangPage> {
                 width: 48,
                 height: 48,
                 decoration: BoxDecoration(
-                  color: Colors.white,
+                  color: const Color(0xFF0A1628),
                   borderRadius: BorderRadius.circular(12),
                 ),
-                child: const Icon(Icons.inventory_2_rounded, color: Color(0xFF0F7A6B), size: 26),
+                child: const Icon(Icons.inventory_2_rounded, color: Colors.white, size: 26),
               ),
               const SizedBox(width: 14),
               Expanded(
@@ -246,8 +242,8 @@ class _DataGadaiBarangPageState extends State<DataGadaiBarangPage> {
                       children: [
                         Text(
                           'GALAXI GADAI  ',
-                          style: GoogleFonts.inter(
-                            color: Colors.white,
+                          style: GoogleFonts.poppins(
+                            color: const Color(0xFF0A1628),
                             fontSize: 16,
                             fontWeight: FontWeight.w800,
                             letterSpacing: 0.5,
@@ -256,12 +252,12 @@ class _DataGadaiBarangPageState extends State<DataGadaiBarangPage> {
                         Container(
                           padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
                           decoration: BoxDecoration(
-                            color: Colors.white.withValues(alpha: 0.2),
+                            color: const Color(0xFF0A1628).withValues(alpha: 0.1),
                             borderRadius: BorderRadius.circular(6),
                           ),
                           child: Text(
                             widget.namaCabang,
-                            style: GoogleFonts.inter(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w600),
+                            style: GoogleFonts.poppins(color: const Color(0xFF0A1628), fontSize: 12, fontWeight: FontWeight.w600),
                           ),
                         ),
                       ],
@@ -269,7 +265,7 @@ class _DataGadaiBarangPageState extends State<DataGadaiBarangPage> {
                     const SizedBox(height: 3),
                     Text(
                       today,
-                      style: GoogleFonts.inter(color: Colors.white.withValues(alpha: 0.8), fontSize: 12),
+                      style: GoogleFonts.inter(color: const Color(0xFF0A1628).withValues(alpha: 0.8), fontSize: 12),
                     ),
                   ],
                 ),
@@ -324,7 +320,7 @@ class _DataGadaiBarangPageState extends State<DataGadaiBarangPage> {
                   height: 46,
                   padding: const EdgeInsets.symmetric(horizontal: 20),
                   decoration: BoxDecoration(
-                    color: const Color(0xFF0F7A6B),
+                    color: const Color(0xFF2563EB),
                     borderRadius: BorderRadius.circular(10),
                   ),
                   child: Center(
@@ -392,7 +388,7 @@ class _DataGadaiBarangPageState extends State<DataGadaiBarangPage> {
               height: 40,
               padding: const EdgeInsets.symmetric(horizontal: 16),
               decoration: BoxDecoration(
-                color: const Color(0xFF0F7A6B),
+                color: const Color(0xFF2563EB),
                 borderRadius: BorderRadius.circular(8),
               ),
               child: Row(
@@ -446,11 +442,11 @@ class _DataGadaiBarangPageState extends State<DataGadaiBarangPage> {
                         width: 70,
                         height: 70,
                         decoration: BoxDecoration(
-                          color: const Color(0xFFE6F7F4),
+                          color: const Color(0xFFEFF6FF),
                           borderRadius: BorderRadius.circular(12),
-                          border: Border.all(color: const Color(0xFFB2E4DB)),
+                          border: Border.all(color: const Color(0xFFBFDBFE)),
                         ),
-                        child: const Icon(Icons.phone_android_rounded, color: Color(0xFF0F7A6B), size: 36),
+                        child: const Icon(Icons.phone_android_rounded, color: Color(0xFF2563EB), size: 36),
                       ),
                       const SizedBox(width: 14),
                       Expanded(
@@ -459,7 +455,7 @@ class _DataGadaiBarangPageState extends State<DataGadaiBarangPage> {
                           children: [
                             Text(
                               tx.transactionCode.isNotEmpty ? tx.transactionCode : tx.id.substring(0, 10).toUpperCase(),
-                              style: GoogleFonts.inter(fontSize: 15, fontWeight: FontWeight.w800, color: const Color(0xFF0D6B5E)),
+                              style: GoogleFonts.inter(fontSize: 15, fontWeight: FontWeight.w800, color: const Color(0xFF0F172A)),
                             ),
                             const SizedBox(height: 4),
                             Text(
@@ -630,9 +626,9 @@ class _DataGadaiBarangPageState extends State<DataGadaiBarangPage> {
       child: Container(
         padding: const EdgeInsets.all(14),
         decoration: BoxDecoration(
-          color: const Color(0xFFE6F7F4),
+          color: const Color(0xFFEFF6FF),
           borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: const Color(0xFFB2E4DB), width: 1),
+          border: Border.all(color: const Color(0xFFBFDBFE), width: 1),
         ),
         child: Row(
           children: [
@@ -643,13 +639,13 @@ class _DataGadaiBarangPageState extends State<DataGadaiBarangPage> {
               decoration: BoxDecoration(
                 color: Colors.white,
                 borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: const Color(0xFFB2E4DB)),
+                border: Border.all(color: const Color(0xFFBFDBFE)),
               ),
               child: ClipRRect(
                 borderRadius: BorderRadius.circular(10),
                 child: const Icon(
                   Icons.phone_android_rounded,
-                  color: Color(0xFF0F7A6B),
+                  color: Color(0xFF2563EB),
                   size: 36,
                 ),
               ),
@@ -667,7 +663,7 @@ class _DataGadaiBarangPageState extends State<DataGadaiBarangPage> {
                     style: GoogleFonts.inter(
                       fontSize: 13,
                       fontWeight: FontWeight.w800,
-                      color: const Color(0xFF0D6B5E),
+                      color: const Color(0xFF0F172A),
                     ),
                   ),
                   const SizedBox(height: 4),

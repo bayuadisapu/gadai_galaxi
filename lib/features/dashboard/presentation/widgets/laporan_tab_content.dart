@@ -211,10 +211,12 @@ class _LaporanTabContentState extends State<LaporanTabContent> {
   Widget build(BuildContext context) {
     return Column(
       children: [
-        // Header biru
+        // Header navy gradient
         Container(
           width: double.infinity,
-          decoration: const BoxDecoration(color: AppColors.primary),
+          decoration: const BoxDecoration(
+            color: Color(0xFF93C5FD),
+          ),
           padding: const EdgeInsets.only(bottom: 24, left: 20, right: 20),
           child: Column(
             children: [
@@ -222,25 +224,25 @@ class _LaporanTabContentState extends State<LaporanTabContent> {
               Container(
                 height: 40,
                 decoration: BoxDecoration(
-                  color: const Color(0xFF1E40AF),
+                  color: const Color(0xFF0A1628).withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(20),
-                  border: Border.all(color: const Color(0xFF3B82F6).withValues(alpha: 0.3)),
+                  border: Border.all(color: const Color(0xFF0A1628).withValues(alpha: 0.2)),
                 ),
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     IconButton(
-                      icon: const Icon(Icons.chevron_left_rounded, color: Colors.white, size: 20),
+                      icon: const Icon(Icons.chevron_left_rounded, color: Color(0xFF0A1628), size: 20),
                       onPressed: () => _onMonthChanged(-1),
                       padding: EdgeInsets.zero,
                       constraints: const BoxConstraints(),
                     ),
                     Text(
                       '${_months[_selectedMonthIndex]} $_selectedYear',
-                      style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w600),
+                      style: const TextStyle(color: Color(0xFF0A1628), fontSize: 14, fontWeight: FontWeight.w600),
                     ),
                     IconButton(
-                      icon: const Icon(Icons.chevron_right_rounded, color: Colors.white, size: 20),
+                      icon: const Icon(Icons.chevron_right_rounded, color: Color(0xFF0A1628), size: 20),
                       onPressed: () => _onMonthChanged(1),
                       padding: EdgeInsets.zero,
                       constraints: const BoxConstraints(),
@@ -260,14 +262,14 @@ class _LaporanTabContentState extends State<LaporanTabContent> {
                         Text(
                           range,
                           style: TextStyle(
-                            color: isSelected ? Colors.white : Colors.white.withValues(alpha: 0.6),
+                            color: isSelected ? const Color(0xFF0A1628) : const Color(0xFF0A1628).withValues(alpha: 0.6),
                             fontSize: 14,
                             fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
                           ),
                         ),
                         const SizedBox(height: 6),
                         if (isSelected)
-                          Container(width: 56, height: 3, decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(1.5)))
+                          Container(width: 56, height: 3, decoration: BoxDecoration(color: const Color(0xFF0A1628), borderRadius: BorderRadius.circular(1.5)))
                         else
                           const SizedBox(height: 3),
                       ],
@@ -300,7 +302,7 @@ class _LaporanTabContentState extends State<LaporanTabContent> {
                           style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
                         ),
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFF10B981),
+                          backgroundColor: const Color(0xFF2563EB),
                           minimumSize: const Size(double.infinity, 48),
                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                           elevation: 0,

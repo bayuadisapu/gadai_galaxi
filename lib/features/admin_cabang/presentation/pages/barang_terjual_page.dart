@@ -105,7 +105,7 @@ class _BarangTerjualPageState extends State<BarangTerjualPage> {
     final rataKeuntungan = _filtered.isEmpty ? 0 : (totalKeuntungan / _filtered.length).round();
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF0F2F5),
+      backgroundColor: const Color(0xFFF8FAFC),
       body: Column(
         children: [
           // ── HEADER TEAL ─────────────────────────────────
@@ -113,10 +113,10 @@ class _BarangTerjualPageState extends State<BarangTerjualPage> {
 
           Expanded(
             child: _isLoading
-                ? const Center(child: CircularProgressIndicator(color: Color(0xFF0F5A47)))
+                ? const Center(child: CircularProgressIndicator(color: Color(0xFF2563EB)))
                 : RefreshIndicator(
                     onRefresh: _loadData,
-                    color: const Color(0xFF0F5A47),
+                    color: const Color(0xFF2563EB),
                     child: SingleChildScrollView(
                       physics: const AlwaysScrollableScrollPhysics(),
                       child: Column(
@@ -160,11 +160,7 @@ class _BarangTerjualPageState extends State<BarangTerjualPage> {
 
     return Container(
       decoration: const BoxDecoration(
-        gradient: LinearGradient(
-          colors: [Color(0xFF0A2A1E), Color(0xFF0F5A47)],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
+        color: Color(0xFF93C5FD),
       ),
       child: SafeArea(
         bottom: false,
@@ -178,25 +174,25 @@ class _BarangTerjualPageState extends State<BarangTerjualPage> {
                   width: 44,
                   height: 44,
                   decoration: BoxDecoration(
-                    color: Colors.white.withValues(alpha: 0.15),
+                    color: const Color(0xFF0A1628).withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(12),
                   ),
                   child: const Center(
-                    child: Text('S', style: TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.bold)),
+                    child: Icon(Icons.arrow_back_rounded, color: Color(0xFF0A1628), size: 22),
                   ),
                 ),
               ),
-              const Expanded(
+              Expanded(
                 child: Column(
                   children: [
-                    Text('GALAXI GADAI', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 14, letterSpacing: 0.5)),
+                    Text('GALAXI GADAI', style: GoogleFonts.poppins(color: const Color(0xFF0A1628), fontWeight: FontWeight.w800, fontSize: 14, letterSpacing: 0.5)),
                   ],
                 ),
               ),
               Column(
                 crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
-                  Text(dateStr, style: GoogleFonts.inter(color: Colors.white.withValues(alpha: 0.7), fontSize: 10)),
+                  Text(dateStr, style: GoogleFonts.inter(color: const Color(0xFF0A1628).withValues(alpha: 0.8), fontSize: 10)),
                 ],
               ),
             ],
@@ -256,7 +252,7 @@ class _BarangTerjualPageState extends State<BarangTerjualPage> {
         children: [
           Row(
             children: [
-              _statItem('$barangCount', 'Barang Terjual', const Color(0xFF0F5A47)),
+              _statItem('$barangCount', 'Barang Terjual', const Color(0xFF2563EB)),
               _verticalDivider(),
               _statItem('Rp\n${_fmt(totalPenjualan)}', 'Total Penjualan', const Color(0xFF2563EB)),
             ],
@@ -266,9 +262,9 @@ class _BarangTerjualPageState extends State<BarangTerjualPage> {
           const SizedBox(height: 16),
           Row(
             children: [
-              _statItem('Rp ${_fmt(totalKeuntungan)}', 'Total Keuntungan', const Color(0xFF0F5A47)),
+              _statItem('Rp ${_fmt(totalKeuntungan)}', 'Total Keuntungan', const Color(0xFF2563EB)),
               _verticalDivider(),
-              _statItem('Rp ${_fmt(rataKeuntungan)}', 'Rata-rata\nKeuntungan', const Color(0xFF0F5A47)),
+              _statItem('Rp ${_fmt(rataKeuntungan)}', 'Rata-rata\nKeuntungan', const Color(0xFF2563EB)),
             ],
           ),
         ],
@@ -428,7 +424,7 @@ class _BarangTerjualPageState extends State<BarangTerjualPage> {
                     DataCell(
                       Text(
                         'Rp ${_fmt(hargaJual)}',
-                        style: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.w700, color: const Color(0xFF0F5A47)),
+                        style: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.w700, color: const Color(0xFF2563EB)),
                       ),
                     ),
                     // Keuntungan

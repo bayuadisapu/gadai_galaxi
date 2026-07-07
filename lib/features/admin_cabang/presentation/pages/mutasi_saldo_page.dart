@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:galaxi_gadai/core/constants/app_colors.dart';
 import 'package:galaxi_gadai/core/services/supabase_gadai_service.dart';
 
@@ -57,14 +58,14 @@ class _MutasiSaldoPageState extends State<MutasiSaldoPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF8F7F0),
+      backgroundColor: const Color(0xFFF8FAFC),
       appBar: AppBar(
-        title: const Text('Mutasi Saldo Tenant', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-        backgroundColor: const Color(0xFF0F5A47),
-        iconTheme: const IconThemeData(color: Colors.white),
+        title: Text('Mutasi Saldo Tenant', style: GoogleFonts.poppins(color: const Color(0xFF0A1628), fontWeight: FontWeight.bold, fontSize: 18)),
+        backgroundColor: const Color(0xFF93C5FD),
+        iconTheme: const IconThemeData(color: Color(0xFF0A1628)),
         actions: [
           IconButton(
-            icon: const Icon(Icons.refresh_rounded, color: Colors.white),
+            icon: const Icon(Icons.refresh_rounded, color: Color(0xFF0A1628)),
             onPressed: _loadData,
           ),
         ],
@@ -79,7 +80,7 @@ class _MutasiSaldoPageState extends State<MutasiSaldoPage> {
                     width: double.infinity,
                     padding: const EdgeInsets.all(24),
                     decoration: const BoxDecoration(
-                      color: Color(0xFF0F5A47),
+                      color: Color(0xFF93C5FD),
                       borderRadius: BorderRadius.only(
                         bottomLeft: Radius.circular(24),
                         bottomRight: Radius.circular(24),
@@ -87,11 +88,11 @@ class _MutasiSaldoPageState extends State<MutasiSaldoPage> {
                     ),
                     child: Column(
                       children: [
-                        const Text('Saldo Saat Ini', style: TextStyle(color: Colors.white70, fontSize: 14)),
+                        Text('Saldo Saat Ini', style: GoogleFonts.poppins(color: const Color(0xFF0A1628), fontSize: 14, fontWeight: FontWeight.w500)),
                         const SizedBox(height: 8),
                         Text(
                           'Rp ${_formatCurrency(_balance)}',
-                          style: const TextStyle(color: Colors.white, fontSize: 28, fontWeight: FontWeight.bold),
+                          style: GoogleFonts.poppins(color: const Color(0xFF0A1628), fontSize: 28, fontWeight: FontWeight.bold),
                         ),
                       ],
                     ),
