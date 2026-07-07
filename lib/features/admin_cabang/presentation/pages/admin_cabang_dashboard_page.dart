@@ -9,7 +9,7 @@ import 'package:galaxi_gadai/features/pawn/presentation/pages/transaksi_detail_p
 import 'package:galaxi_gadai/features/customer/presentation/pages/customer_search_page.dart';
 import 'package:galaxi_gadai/features/dashboard/presentation/widgets/laporan_tab_content.dart';
 import 'mutasi_saldo_page.dart';
-import 'barang_list_page.dart';
+import 'package:galaxi_gadai/features/pawn/presentation/pages/data_gadai_barang_page.dart';
 import 'lelang_page.dart';
 import 'barang_terjual_page.dart';
 import 'history_transaksi_page.dart';
@@ -516,7 +516,7 @@ class _AdminCabangDashboardPageState extends State<AdminCabangDashboardPage> {
                         Navigator.push(context, MaterialPageRoute(builder: (_) => NewPawnPage(branchId: widget.cabangId))).then((_) => _loadData());
                       }),
                       _buildGridItem('Barang', Icons.inventory_2_outlined, () {
-                        Navigator.push(context, MaterialPageRoute(builder: (_) => BarangListPage(branchId: widget.cabangId)));
+                        Navigator.push(context, MaterialPageRoute(builder: (_) => DataGadaiBarangPage(branchId: widget.cabangId, namaCabang: widget.namaCabang))).then((_) => _loadData());
                       }),
                       _buildGridItem('Nasabah', Icons.people_outline_rounded, () {
                         Navigator.push(context, MaterialPageRoute(builder: (_) => CustomerSearchPage(isTab: false, branchId: widget.cabangId)));
