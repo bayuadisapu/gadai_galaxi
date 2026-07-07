@@ -907,4 +907,98 @@ class SupabaseGadaiService {
       return [];
     }
   }
+
+  // ═══════════════════════════════════
+  // ADMIN PASSWORD MANAGEMENT (Tahap 4)
+  // ═══════════════════════════════════
+
+  /// Super admin reset password staff/admin via Supabase RPC.
+  Future<void> updateStaffPassword({
+    required String userId,
+    required String newPassword,
+  }) async {
+    try {
+      await _client.rpc('admin_reset_password', params: {
+        'p_user_id': userId,
+        'p_new_password': newPassword,
+      });
+    } catch (e) {
+      throw Exception('Gagal reset password: $e.\nPastikan RPC admin_reset_password sudah dibuat di Supabase.');
+    }
+  }
+
+  // ═══════════════════════════════════
+  // KAS MANAGEMENT (Tahap 5)
+  // ═══════════════════════════════════
+
+  /// Ambil semua entri kas, opsional filter per cabang
+  Future<List<Map<String, dynamic>>> fetchKas({String? cabangId}) async {
+    try {
+      if (cabangId != null && cabangId.isNotEmpty) {
+        final data = await _client
+            .from('gadai_kas')
+            .select()
+            .eq('cabang_id', cabangId)
+            .order('tanggal', ascending: false)
+            .order('created_at', ascending: false)
+            .limit(500);
+        return List<Map<String, dynamic>>.from(data);
+      } else {
+        final data = await _client
+            .from('gadai_kas')
+            .select()
+            .order('tanggal', ascending: false)
+            .order('created_at', ascending: false)
+            .limit(500);
+        return List<Map<String, dynamic>>.from(data);
+      }
+    } catch (e) {
+      debugPrint('[Kas FETCH ERROR] $e');
+      return [];
+    }
+  }
+
+  /// Tambah entri kas baru
+  Future<void> addKasEntry({
+    required String cabangId,
+    required String jenis, // 'masuk' atau 'keluar'
+    required String kategori,
+    required int jumlah,
+    required String keterangan,
+    required String tanggal, // format: 'YYYY-MM-DD'
+    String? createdBy,
+  }) async {
+    await _client.from('gadai_kas').insert({
+      'cabang_id': cabangId,
+      'jenis': jenis,
+      'kategori': kategori,
+      'jumlah': jumlah,
+      'keterangan': keterangan,
+      'tanggal': tanggal,
+      'created_by': createdBy ?? 'super_admin',
+    });
+  }
+
+  /// Hapus entri kas
+  Future<void> deleteKasEntry(String kasId) async {
+    await _client.from('gadai_kas').delete().eq('id', kasId);
+  }
+
+  /// Hitung saldo kas per cabang (total masuk - total keluar)
+  Future<Map<String, int>> fetchKasSaldo() async {
+    try {
+      final data = await _client.from('gadai_kas').select('cabang_id, jenis, jumlah');
+      final Map<String, int> saldo = {};
+      for (final row in data) {
+        final cabId = row['cabang_id'] as String;
+        final jenis = row['jenis'] as String;
+        final jumlah = (row['jumlah'] as num).toInt();
+        saldo[cabId] = (saldo[cabId] ?? 0) + (jenis == 'masuk' ? jumlah : -jumlah);
+      }
+      return saldo;
+    } catch (e) {
+      debugPrint('[Kas SALDO ERROR] $e');
+      return {};
+    }
+  }
 }

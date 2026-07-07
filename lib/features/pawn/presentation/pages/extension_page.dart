@@ -36,11 +36,18 @@ class _ExtensionPageState extends State<ExtensionPage> {
       final customers = await _svc.fetchNasabah();
       if (!mounted) return;
       setState(() { _allTxs = txs; _allCustomers = customers; _isLoading = false; });
+      final activeTxs = _getActiveTransactions();
       if (widget.prefilledTxId != null) {
-        _selectedTxId = widget.prefilledTxId;
+        // Pastikan prefilledTxId ada di dalam daftar aktif
+        final exists = activeTxs.any((tx) => tx.id == widget.prefilledTxId);
+        if (exists) {
+          setState(() => _selectedTxId = widget.prefilledTxId);
+        } else if (activeTxs.isNotEmpty) {
+          // Fallback ke item pertama jika tidak ditemukan di daftar
+          setState(() => _selectedTxId = activeTxs.first.id);
+        }
       } else {
-        final activeTxs = _allTxs.where((tx) => tx.status != 'Lunas').toList();
-        if (activeTxs.isNotEmpty) _selectedTxId = activeTxs.first.id;
+        if (activeTxs.isNotEmpty) setState(() => _selectedTxId = activeTxs.first.id);
       }
     } catch (e) {
       if (!mounted) return;
@@ -50,7 +57,11 @@ class _ExtensionPageState extends State<ExtensionPage> {
 
   List<PawnTransaction> _getActiveTransactions() {
     // Hanya tampilkan transaksi yang masih bisa diperpanjang
-    return _allTxs.where((tx) => tx.status == 'Aktif' || tx.status == 'Macet').toList();
+    return _allTxs.where((tx) =>
+        tx.status == 'Aktif' ||
+        tx.status == 'Macet' ||
+        tx.status == 'Perlu_Bayar_Jatip'
+    ).toList();
   }
 
   PawnTransaction? _getSelectedTransaction() {
@@ -260,7 +271,7 @@ class _ExtensionPageState extends State<ExtensionPage> {
                     ),
                     const SizedBox(height: 8),
                     DropdownButtonFormField<String>(
-                      initialValue: _selectedTxId,
+                      value: activeTxs.any((tx) => tx.id == _selectedTxId) ? _selectedTxId : null,
                       decoration: InputDecoration(
                         filled: true,
                         fillColor: Colors.white,
