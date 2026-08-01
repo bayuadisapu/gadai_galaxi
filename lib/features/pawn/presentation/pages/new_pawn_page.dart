@@ -1,15 +1,19 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+
 import 'package:galaxi_gadai/core/constants/app_colors.dart';
-import 'package:galaxi_gadai/core/data/mock_data.dart';
+import 'package:galaxi_gadai/core/data/data_models.dart';
 import 'package:galaxi_gadai/core/services/supabase_gadai_service.dart';
+import 'package:galaxi_gadai/core/services/perjanjian_pdf_service.dart';
 import '../widgets/new_pawn_shared_widgets.dart';
 import '../widgets/step_1_collateral_view.dart';
 import '../widgets/step_2_finance_view.dart';
 import '../widgets/step_3_biodata_view.dart';
 import '../widgets/success_dialog.dart';
 import 'package:galaxi_gadai/core/config/system_config.dart';
+import 'package:url_launcher/url_launcher.dart';
+import 'package:share_plus/share_plus.dart';
 
 class NewPawnPage extends StatefulWidget {
   final String branchId;
@@ -32,7 +36,9 @@ class _NewPawnPageState extends State<NewPawnPage> {
   
   // Barang form specific state
   String _selectedBarangType = 'Handphone';
-  String? _selectedBrand;
+  final TextEditingController _brandController = TextEditingController(); // Merk (free text)
+  final TextEditingController _storageController = TextEditingController(); // Internal Storage
+  final TextEditingController _ramController = TextEditingController(); // RAM
   String _deviceLock = 'PIN/Sandi';
   bool _hasCharger = false;
   bool _hasTas = false;
@@ -40,6 +46,7 @@ class _NewPawnPageState extends State<NewPawnPage> {
   String? _selectedCondition;
   final TextEditingController _modelController = TextEditingController(); // Tipe / Model
   final TextEditingController _noteController = TextEditingController(); // Keterangan
+  final TextEditingController _lockCodeController = TextEditingController(); // PIN/Pola kunci
 
   // Emas form specific state
   String? _selectedGoldType;
@@ -83,10 +90,20 @@ class _NewPawnPageState extends State<NewPawnPage> {
   bool _customerAndBarangPhotoUploaded = false;
   int? _customTaksiranOverride;
 
+  // Foto XFile — disimpan di parent agar bisa diakses saat submit
+  XFile? _barangXFile;
+  XFile? _ktpXFile;
+  XFile? _nasabahXFile;
+  XFile? _barangGadaiXFile;
+
   @override
   void dispose() {
+    _brandController.dispose();
+    _storageController.dispose();
+    _ramController.dispose();
     _modelController.dispose();
     _noteController.dispose();
+    _lockCodeController.dispose();
     _grossWeightController.dispose();
     _netWeightController.dispose();
     _vehicleBrandTypeController.dispose();
@@ -115,11 +132,13 @@ class _NewPawnPageState extends State<NewPawnPage> {
       return _customTaksiranOverride!;
     }
     if (_selectedCollateral == 'Barang') {
+      final brand = _brandController.text.toLowerCase();
       double basePrice = 3000000;
-      if (_selectedBrand == 'Apple') basePrice = 12000000;
-      else if (_selectedBrand == 'Samsung') basePrice = 8000000;
-      else if (_selectedBrand == 'Xiaomi') basePrice = 4000000;
-      else if (_selectedBrand == 'Oppo') basePrice = 3500000;
+      if (brand.contains('apple') || brand.contains('iphone')) basePrice = 12000000;
+      else if (brand.contains('samsung')) basePrice = 8000000;
+      else if (brand.contains('xiaomi')) basePrice = 4000000;
+      else if (brand.contains('oppo') || brand.contains('vivo') || brand.contains('realme')) basePrice = 3500000;
+      else if (brand.contains('asus') || brand.contains('lenovo') || brand.contains('dell')) basePrice = 5000000;
       
       double multiplier = 0.5;
       if (_selectedCondition == 'Mulus (95%+)') multiplier = 0.85;
@@ -150,11 +169,14 @@ class _NewPawnPageState extends State<NewPawnPage> {
   void _onCollateralSelected(String type) {
     setState(() {
       _selectedCollateral = type;
-      _selectedBrand = null;
+      _brandController.clear();
+      _storageController.clear();
+      _ramController.clear();
       _selectedCondition = null;
       _selectedGoldType = null;
       _selectedKarat = null;
       _selectedCertificate = null;
+      _customTaksiranOverride = null;
       
       _grossWeightController.clear();
       _netWeightController.clear();
@@ -166,6 +188,7 @@ class _NewPawnPageState extends State<NewPawnPage> {
       _vehicleNoPolisiController.clear();
       _modelController.clear();
       _noteController.clear();
+      _lockCodeController.clear();
       
       _deviceLock = 'PIN/Sandi';
       _hasCharger = false;
@@ -229,16 +252,7 @@ class _NewPawnPageState extends State<NewPawnPage> {
   Future<void> _handleNextStep() async {
     if (_currentStep == 1) {
       if (_step1FormKey.currentState!.validate()) {
-        if (!_barangPhotoUploaded) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Silakan unggah foto barang jaminan terlebih dahulu'),
-              backgroundColor: Colors.orange,
-              behavior: SnackBarBehavior.floating,
-            ),
-          );
-          return;
-        }
+        _step1FormKey.currentState!.save();
 
         // Prefill pawn amount dynamically to maximum estimate for high-fidelity flow
         final taksiranVal = _collateralTaksiranValue;
@@ -263,27 +277,6 @@ class _NewPawnPageState extends State<NewPawnPage> {
       }
     } else if (_currentStep == 3) {
       if (_step3FormKey.currentState!.validate()) {
-        if (!_ktpUploaded) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Silakan unggah foto KTP nasabah terlebih dahulu'),
-              backgroundColor: Colors.orange,
-              behavior: SnackBarBehavior.floating,
-            ),
-          );
-          return;
-        }
-        if (!_customerAndBarangPhotoUploaded) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Silakan unggah foto nasabah & barang jaminan terlebih dahulu'),
-              backgroundColor: Colors.orange,
-              behavior: SnackBarBehavior.floating,
-            ),
-          );
-          return;
-        }
-
         final dobDay = _birthDay ?? '01';
         final dobMonth = _birthMonth ?? 'Januari';
         final dobYear = _birthYear ?? '1990';
@@ -312,8 +305,16 @@ class _NewPawnPageState extends State<NewPawnPage> {
         String txCondition = '';
         
         if (_selectedCollateral == 'Barang') {
-          txBrand = _selectedBrand ?? 'Lainnya';
-          txModel = _modelController.text.isNotEmpty ? _modelController.text : 'Gadai Barang';
+          txBrand = _brandController.text.trim().isNotEmpty ? _brandController.text.trim() : 'Lainnya';
+          final modelBase = _modelController.text.isNotEmpty ? _modelController.text : 'Gadai Barang';
+          final storage = _storageController.text.trim();
+          final ram = _ramController.text.trim();
+          final isHpOrLaptop = _selectedBarangType == 'Handphone' || _selectedBarangType == 'Laptop';
+          if (isHpOrLaptop && (storage.isNotEmpty || ram.isNotEmpty)) {
+            txModel = '$modelBase${storage.isNotEmpty ? ' / $storage' : ''}${ram.isNotEmpty ? ' / RAM $ram' : ''}';
+          } else {
+            txModel = modelBase;
+          }
           txCondition = _selectedCondition ?? 'Normal';
         } else if (_selectedCollateral == 'Emas') {
           txBrand = _selectedGoldType ?? 'Emas';
@@ -365,11 +366,53 @@ class _NewPawnPageState extends State<NewPawnPage> {
 
           final createdTx = await svc.createTransaction(newTx);
 
-          // Record admin fee to Tenant Wallet (Supabase — fire-and-forget)
+          // Upload foto + simpan note + kode kunci ke DB (fire-and-forget)
+          final noteParts = <String>[];
+          if (_noteController.text.trim().isNotEmpty) noteParts.add(_noteController.text.trim());
+          if (_lockCodeController.text.trim().isNotEmpty && _deviceLock != 'Tanpa Kunci') {
+            noteParts.add('Kunci: $_deviceLock — ${_lockCodeController.text.trim()}');
+          }
+
+          // Baca bytes foto yang sudah dipilih user
+          final List<int>? barangBytes     = _barangXFile     != null ? await _barangXFile!.readAsBytes()     : null;
+          final List<int>? ktpBytes        = _ktpXFile        != null ? await _ktpXFile!.readAsBytes()        : null;
+          final List<int>? nasabahBytes    = _nasabahXFile    != null ? await _nasabahXFile!.readAsBytes()    : null;
+          final List<int>? barangGadaiBytes= _barangGadaiXFile!= null ? await _barangGadaiXFile!.readAsBytes(): null;
+
+          // Upload foto + simpan note + kode kunci ke DB
+          // ⚠️ Di-await agar URL foto benar-benar tersimpan ke DB sebelum lanjut
+          try {
+            await svc.uploadTransactionPhotos(
+              txId: createdTx.id,
+              fotoBarang:      barangBytes?.isNotEmpty == true ? barangBytes : null,
+              fotoKtp:         ktpBytes?.isNotEmpty    == true ? ktpBytes    : null,
+              fotoNasabah:     nasabahBytes?.isNotEmpty== true ? nasabahBytes: null,
+              fotoBarangGadai: barangGadaiBytes?.isNotEmpty == true ? barangGadaiBytes : null,
+              note: noteParts.isNotEmpty ? noteParts.join(' | ') : null,
+            );
+          } catch (e) {
+            debugPrint('uploadTransactionPhotos error: $e');
+            // Lanjutkan proses — transaksi sudah berhasil disimpan,
+            // foto bisa diupload ulang nanti jika perlu.
+          }
+
+          // Record admin fee to rekening gadai (Supabase — fire-and-forget)
           unawaited(svc.walletTopUp(widget.branchId, 10000, 'Admin Fee Gadai - $txModel ($_adminFeePaymentMethod)'));
+
+          // Pencairan pinjaman — kurangi saldo kas/rekening cabang
+          unawaited(svc.walletDebit(widget.branchId, pawnAmt, 'Pencairan Gadai - $txBrand $txModel (${createdTx.displayCode})'));
 
           // Log transaksi baru
           unawaited(svc.logTransaksiCreated(createdCust.id, createdTx.id, '$txBrand $txModel', pawnAmt));
+
+          // ── Otomatis generate PDF & share ke WA nasabah (fire-and-forget) ──
+          final staffData = await svc.getCurrentStaff();
+          final staffName = staffData?['nama']?.toString() ?? 'Petugas';
+          unawaited(_exportAndSharePerjanjian(
+            tx: createdTx,
+            customer: createdCust,
+            petugasName: staffName,
+          ));
 
           if (!mounted) return;
           setState(() => _isLoading = false);
@@ -403,11 +446,21 @@ class _NewPawnPageState extends State<NewPawnPage> {
           onCollateralSelected: _onCollateralSelected,
           barangPhotoUploaded: _barangPhotoUploaded,
           onBarangPhotoUploadedChanged: (val) => setState(() => _barangPhotoUploaded = val),
+          onBarangPhotoChanged: (xfile) => _barangXFile = xfile,
+          ktpUploaded: _ktpUploaded,
+          onKtpUploadedChanged: (val) => setState(() => _ktpUploaded = val),
+          onKtpPhotoChanged: (xfile) => _ktpXFile = xfile,
+          customerAndBarangPhotoUploaded: _customerAndBarangPhotoUploaded,
+          onCustomerAndBarangPhotoUploadedChanged: (val) => setState(() => _customerAndBarangPhotoUploaded = val),
+          onNasabahPhotoChanged: (xfile) => _nasabahXFile = xfile,
+          onBarangGadaiPhotoChanged: (xfile) => _barangGadaiXFile = xfile,
           
           selectedBarangType: _selectedBarangType,
           onBarangTypeChanged: (val) => setState(() => _selectedBarangType = val ?? 'Handphone'),
-          selectedBrand: _selectedBrand,
-          onBrandChanged: (val) => setState(() => _selectedBrand = val),
+          brandController: _brandController,
+          storageController: _storageController,
+          ramController: _ramController,
+          lockCodeController: _lockCodeController,
           modelController: _modelController,
           selectedCondition: _selectedCondition,
           onConditionChanged: (val) => setState(() => _selectedCondition = val),
@@ -457,7 +510,7 @@ class _NewPawnPageState extends State<NewPawnPage> {
           pawnAmountController: _pawnAmountController,
           periodController: _periodController,
           adminFeePaymentMethod: _adminFeePaymentMethod,
-          onAdminFeePaymentMethodChanged: (val) => setState(() => _adminFeePaymentMethod = val!),
+          onAdminFeePaymentMethodChanged: (val) => setState(() => _adminFeePaymentMethod = val ?? _adminFeePaymentMethod),
           onAmountChanged: () => setState(() {}),
           maxTaksiran: _collateralTaksiranValue,
         );
@@ -592,6 +645,96 @@ class _NewPawnPageState extends State<NewPawnPage> {
         ],
       ),
     );
+  }
+
+  // ══════════════════════════════════════════════════════════
+  // GENERATE PDF PERJANJIAN DAN SHARE KE WA NASABAH
+  // ══════════════════════════════════════════════════════════
+  Future<void> _exportAndSharePerjanjian({
+    required PawnTransaction tx,
+    required Customer customer,
+    required String petugasName,
+  }) async {
+    try {
+      // 1. Generate PDF lokal
+      final pdfFile = await PerjanjianPdfService.instance.generatePerjanjianPdf(
+        tx: tx,
+        customer: customer,
+        petugasName: petugasName,
+      );
+
+      final displayCode = tx.transactionCode.isNotEmpty
+          ? tx.transactionCode
+          : tx.id.substring(0, 10).toUpperCase();
+
+      final String tglGadai =
+          '${tx.dateApplied.day.toString().padLeft(2, '0')}-'
+          '${tx.dateApplied.month.toString().padLeft(2, '0')}-'
+          '${tx.dateApplied.year}';
+      final String tglJatuhTempo =
+          '${tx.dateDue.day.toString().padLeft(2, '0')}-'
+          '${tx.dateDue.month.toString().padLeft(2, '0')}-'
+          '${tx.dateDue.year}';
+
+      // 2. Upload PDF ke Supabase bucket gadai-files (fire-and-forget)
+      //    Path: {txId}/perjanjian.pdf  → URL publik tersimpan di DB
+      String? pdfPublicUrl;
+      try {
+        final pdfBytes = await pdfFile.readAsBytes();
+        pdfPublicUrl = await SupabaseGadaiService.instance.uploadPerjanjianPdf(
+          txId: tx.id,
+          pdfBytes: pdfBytes,
+        );
+      } catch (_) {
+        // Jika upload gagal, share tetap jalan dengan file lokal
+      }
+
+      // 3. Caption WA — sertakan link publik jika upload berhasil
+      final linkLine = pdfPublicUrl != null
+          ? '\n🔗 Lihat/Download PDF: $pdfPublicUrl\n'
+          : '';
+
+      final caption =
+          'Halo *${customer.name}* 👋\n\n'
+          'Terlampir *Surat Perjanjian Gadai* Anda dari GALAXI GADAI.\n\n'
+          '📄 No. Kontrak : $displayCode\n'
+          '📅 Tgl. Gadai  : $tglGadai\n'
+          '⏰ Jatuh Tempo : $tglJatuhTempo'
+          '$linkLine\n'
+          'Simpan dokumen ini sebagai bukti perjanjian Anda.\n\n'
+          '_GALAXI GADAI | Jl. Mt Haryono no 29, Buol_';
+
+      // 4. Share file PDF lokal via share sheet (user pilih WhatsApp)
+      final xFile = XFile(pdfFile.path, mimeType: 'application/pdf');
+      await Share.shareXFiles(
+        [xFile],
+        text: caption,
+        subject: 'Perjanjian Gadai $displayCode - GALAXI GADAI',
+      );
+    } catch (_) {
+      // Fallback: buka wa.me dengan teks ringkasan jika PDF gagal
+      try {
+        final phone = customer.phone.replaceAll(RegExp(r'[^0-9]'), '');
+        if (phone.isEmpty) return;
+        final waNumber = phone.startsWith('0')
+            ? '62${phone.substring(1)}'
+            : phone.startsWith('62') ? phone : '62$phone';
+        final displayCode = tx.transactionCode.isNotEmpty
+            ? tx.transactionCode
+            : tx.id.substring(0, 10).toUpperCase();
+        final msg = Uri.encodeComponent(
+            '📋 *Perjanjian Gadai $displayCode* dari GALAXI GADAI\n'
+            'Tgl: ${tx.dateApplied.day}-${tx.dateApplied.month}-${tx.dateApplied.year}\n'
+            'JT : ${tx.dateDue.day}-${tx.dateDue.month}-${tx.dateDue.year}\n'
+            '_GALAXI GADAI_');
+        final uri = Uri.parse('https://wa.me/$waNumber?text=$msg');
+        if (await canLaunchUrl(uri)) {
+          await launchUrl(uri, mode: LaunchMode.externalApplication);
+        }
+      } catch (_) {
+        // Silent fail
+      }
+    }
   }
 }
 

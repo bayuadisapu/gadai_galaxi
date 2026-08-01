@@ -7,10 +7,15 @@ void main() async {
   );
 
   try {
-    final res = await client.from('profiles').select();
-    print('=== PROFILES TABLE ROWS ===');
-    print(res);
+    final res = await client.from('gadai_transactions').select().limit(1);
+    print('=== GADAI_TRANSACTIONS SAMPLE ROW ===');
+    if (res.isNotEmpty) {
+      print(res.first.keys.toList());
+      print(res.first);
+    } else {
+      print('No transactions found in DB.');
+    }
   } catch (e) {
-    print('Error profiles: $e');
+    print('Error: $e');
   }
 }

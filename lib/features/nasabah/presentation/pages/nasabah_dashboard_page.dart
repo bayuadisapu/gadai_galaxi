@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:galaxi_gadai/core/constants/app_colors.dart';
-import 'package:galaxi_gadai/core/data/mock_data.dart';
+import 'package:galaxi_gadai/core/data/data_models.dart';
 import 'package:galaxi_gadai/core/services/supabase_gadai_service.dart';
+import 'package:galaxi_gadai/core/services/fcm_service.dart';
 import 'package:galaxi_gadai/features/auth/presentation/pages/role_portal_page.dart';
 import '../widgets/nasabah_home_tab.dart';
 import '../widgets/nasabah_riwayat_tab.dart';
@@ -27,6 +29,13 @@ class _NasabahDashboardPageState extends State<NasabahDashboardPage> {
   void initState() {
     super.initState();
     _loadData();
+    _initFcm();
+  }
+
+  Future<void> _initFcm() async {
+    await FcmService.instance.initialize();
+    await FcmService.instance.requestPermission();
+    await FcmService.instance.saveNasabahFcmToken(widget.customer.phone);
   }
 
   Future<void> _loadData() async {
@@ -56,6 +65,8 @@ class _NasabahDashboardPageState extends State<NasabahDashboardPage> {
           TextButton(
             onPressed: () async {
               Navigator.pop(ctx);
+              // Hapus sesi lokal nasabah
+              await _svc.clearNasabahSession();
               // Log aktivitas logout
               await _svc.logNasabahLogout(widget.customer.id, widget.customer.name);
               if (!mounted) return;
@@ -96,7 +107,17 @@ class _NasabahDashboardPageState extends State<NasabahDashboardPage> {
       }
     }
 
-    return Scaffold(
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, result) {
+        if (didPop) return;
+        if (_currentIndex != 0) {
+          setState(() => _currentIndex = 0);
+        } else {
+          SystemNavigator.pop();
+        }
+      },
+      child: Scaffold(
       body: Stack(
         children: [
           // Background Painter
@@ -277,6 +298,7 @@ class _NasabahDashboardPageState extends State<NasabahDashboardPage> {
           ),
         ],
       ),
+    ),
     );
   }
 }

@@ -2,9 +2,9 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:galaxi_gadai/core/services/supabase_gadai_service.dart';
-import 'package:galaxi_gadai/features/dashboard/presentation/pages/branch_dashboard_page.dart';
 import 'package:galaxi_gadai/features/admin_cabang/presentation/pages/admin_cabang_dashboard_page.dart';
 import 'package:galaxi_gadai/features/super_admin/presentation/pages/super_admin_dashboard_page.dart';
+import 'package:galaxi_gadai/features/nasabah/presentation/pages/nasabah_dashboard_page.dart';
 import 'package:galaxi_gadai/features/auth/presentation/pages/staff_login_page.dart';
 import 'package:galaxi_gadai/features/auth/presentation/pages/nasabah_login_page.dart';
 
@@ -17,7 +17,6 @@ class RolePortalPage extends StatefulWidget {
 
 class _RolePortalPageState extends State<RolePortalPage>
     with SingleTickerProviderStateMixin {
-  bool _checkingAuth = true;
   late AnimationController _animController;
   late Animation<double> _fadeAnim;
 
@@ -29,7 +28,7 @@ class _RolePortalPageState extends State<RolePortalPage>
       duration: const Duration(milliseconds: 900),
     );
     _fadeAnim = CurvedAnimation(parent: _animController, curve: Curves.easeOut);
-    _checkExistingSession();
+    _animController.forward();
   }
 
   @override
@@ -38,102 +37,8 @@ class _RolePortalPageState extends State<RolePortalPage>
     super.dispose();
   }
 
-  Future<void> _checkExistingSession() async {
-    try {
-      final svc = SupabaseGadaiService.instance;
-      final staff = await svc.getCurrentStaff();
-      if (staff != null) {
-        final role = staff['role']!;
-        final branchId = staff['cabangId']!;
-        final branchName = await svc.getBranchName(branchId);
-        if (!mounted) return;
-        _navigateByRole(role, staff, branchName);
-      } else {
-        if (mounted) {
-          setState(() => _checkingAuth = false);
-          _animController.forward();
-        }
-      }
-    } catch (_) {
-      if (mounted) {
-        setState(() => _checkingAuth = false);
-        _animController.forward();
-      }
-    }
-  }
-
-  void _navigateByRole(String role, Map<String, String> account, String branchName) {
-    switch (role) {
-      case 'verifikator':
-        Navigator.pushReplacement(context, MaterialPageRoute(
-          builder: (_) => BranchDashboardPage(cabangId: account['cabangId']!),
-        ));
-        break;
-      case 'admin_cabang':
-        Navigator.pushReplacement(context, MaterialPageRoute(
-          builder: (_) => AdminCabangDashboardPage(
-            namaAdmin: account['nama']!,
-            namaCabang: branchName,
-            cabangId: account['cabangId']!,
-          ),
-        ));
-        break;
-      case 'super_admin':
-        Navigator.pushReplacement(context,
-            MaterialPageRoute(builder: (_) => const SuperAdminDashboardPage()));
-        break;
-      default:
-        setState(() => _checkingAuth = false);
-        _animController.forward();
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
-    if (_checkingAuth) {
-      return Scaffold(
-        backgroundColor: const Color(0xFF0A1628),
-        body: Center(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(
-                width: 72,
-                height: 72,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  gradient: const LinearGradient(
-                    colors: [Color(0xFF2563EB), Color(0xFF1E40AF)],
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                  ),
-                  boxShadow: [
-                    BoxShadow(
-                      color: const Color(0xFF2563EB).withValues(alpha: 0.4),
-                      blurRadius: 24,
-                      offset: const Offset(0, 8),
-                    ),
-                  ],
-                ),
-                child: const Icon(Icons.account_balance_rounded,
-                    color: Colors.white, size: 32),
-              ),
-              const SizedBox(height: 24),
-              SizedBox(
-                width: 28,
-                height: 28,
-                child: CircularProgressIndicator(
-                  strokeWidth: 2.5,
-                  valueColor: AlwaysStoppedAnimation<Color>(
-                    Colors.white.withValues(alpha: 0.6),
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-      );
-    }
 
     return Scaffold(
       body: Stack(
@@ -155,29 +60,39 @@ class _RolePortalPageState extends State<RolePortalPage>
                   children: [
                     const SizedBox(height: 56),
 
-                    // Brand Logo
+                    // Brand Logo (Bulat)
                     Container(
                       width: 90,
                       height: 90,
-                      decoration: BoxDecoration(
+                      decoration: const BoxDecoration(
                         shape: BoxShape.circle,
-                        gradient: const LinearGradient(
-                          colors: [Color(0xFF2563EB), Color(0xFF1E40AF)],
-                          begin: Alignment.topLeft,
-                          end: Alignment.bottomRight,
-                        ),
-                        boxShadow: [
-                          BoxShadow(
-                            color: const Color(0xFF2563EB).withValues(alpha: 0.35),
-                            blurRadius: 32,
-                            offset: const Offset(0, 12),
-                          ),
-                        ],
                       ),
-                      child: const Icon(
-                        Icons.account_balance_rounded,
-                        color: Colors.white,
-                        size: 40,
+                      child: ClipOval(
+                        child: Image.asset(
+                          'logo.png',
+                          width: 90,
+                          height: 90,
+                          fit: BoxFit.cover,
+                          errorBuilder: (context, error, stackTrace) {
+                            return Container(
+                              width: 90,
+                              height: 90,
+                              decoration: const BoxDecoration(
+                                shape: BoxShape.circle,
+                                gradient: LinearGradient(
+                                  colors: [Color(0xFF2563EB), Color(0xFF1E40AF)],
+                                  begin: Alignment.topLeft,
+                                  end: Alignment.bottomRight,
+                                ),
+                              ),
+                              child: const Icon(
+                                Icons.account_balance_rounded,
+                                color: Colors.white,
+                                size: 40,
+                              ),
+                            );
+                          },
+                        ),
                       ),
                     ),
                     const SizedBox(height: 20),

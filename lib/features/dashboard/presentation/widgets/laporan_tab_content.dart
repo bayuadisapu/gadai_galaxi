@@ -1,8 +1,12 @@
+import 'dart:io';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:galaxi_gadai/core/constants/app_colors.dart';
-import 'package:galaxi_gadai/core/data/mock_data.dart';
+import 'package:galaxi_gadai/core/data/data_models.dart';
 import 'package:galaxi_gadai/core/services/supabase_gadai_service.dart';
+import 'package:galaxi_gadai/core/services/laporan_pdf_service.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:share_plus/share_plus.dart';
 
 class LaporanTabContent extends StatefulWidget {
   final String branchId;
@@ -18,10 +22,15 @@ class _LaporanTabContentState extends State<LaporanTabContent> {
   int _selectedYear = DateTime.now().year;
   bool _isExporting = false;
   bool _isLoading = true;
+  String _selectedStatusFilter = 'Semua';
+  String _selectedBranchFilter = 'all';
 
   // Data real dari Supabase
   List<PawnTransaction> _allTransactions = [];
   List<PawnTransaction> _filtered = [];
+  List<Cabang> _branches = [];
+  final Map<String, String> _custNames = {};
+  final Map<String, String> _branchNames = {};
 
   // Stats yang dihitung dari data real
   int _totalJasaTitip = 0;
@@ -29,6 +38,7 @@ class _LaporanTabContentState extends State<LaporanTabContent> {
   int _lunasCount = 0;
   int _aktifCount = 0;
   int _macetCount = 0;
+  int _lelangCount = 0;
   Map<String, int> _jenisCount = {};
   List<int> _weeklyCount = [0, 0, 0, 0, 0];
 
@@ -46,8 +56,21 @@ class _LaporanTabContentState extends State<LaporanTabContent> {
   Future<void> _loadTransactions() async {
     setState(() => _isLoading = true);
     try {
-      final branchId = widget.branchId == 'all' ? null : widget.branchId;
-      final txs = await SupabaseGadaiService.instance.fetchTransactions(branchId: branchId);
+      final svc = SupabaseGadaiService.instance;
+      final branches = await svc.fetchBranches();
+      _branches = branches;
+      _branchNames.clear();
+      for (final b in branches) {
+        _branchNames[b.id] = b.nama;
+      }
+
+      final customers = await svc.fetchNasabah();
+      _custNames.clear();
+      for (final c in customers) {
+        _custNames[c.id] = c.name;
+      }
+
+      final txs = await svc.fetchTransactions();
       if (!mounted) return;
       _allTransactions = txs;
       _computeStats();
@@ -61,15 +84,32 @@ class _LaporanTabContentState extends State<LaporanTabContent> {
     final m = _selectedMonthIndex + 1;
     final y = _selectedYear;
 
-    _filtered = _allTransactions.where((tx) {
+    var list = _allTransactions;
+    if (widget.branchId != 'all') {
+      list = list.where((tx) => tx.cabangId == widget.branchId).toList();
+    } else if (_selectedBranchFilter != 'all') {
+      list = list.where((tx) => tx.cabangId == _selectedBranchFilter).toList();
+    }
+
+    final monthlyList = list.where((tx) {
       return tx.dateApplied.year == y && tx.dateApplied.month == m;
     }).toList();
 
+    if (_selectedStatusFilter == 'Lelang') {
+      _filtered = monthlyList.where((tx) => tx.status == 'Lelang' || tx.status == 'Terjual').toList();
+    } else if (_selectedStatusFilter != 'Semua') {
+      _filtered = monthlyList.where((tx) => tx.status == _selectedStatusFilter).toList();
+    } else {
+      _filtered = monthlyList;
+    }
+
     _totalJasaTitip = _filtered.fold(0, (s, tx) => s + tx.totalFee);
     _totalPokok = _filtered.fold(0, (s, tx) => s + tx.principal);
-    _lunasCount = _filtered.where((tx) => tx.status == 'Lunas').length;
-    _aktifCount = _filtered.where((tx) => tx.status == 'Aktif').length;
-    _macetCount = _filtered.where((tx) => tx.status == 'Macet').length;
+
+    _lunasCount = monthlyList.where((tx) => tx.status == 'Lunas').length;
+    _aktifCount = monthlyList.where((tx) => tx.status == 'Aktif').length;
+    _macetCount = monthlyList.where((tx) => tx.status == 'Macet').length;
+    _lelangCount = monthlyList.where((tx) => tx.status == 'Lelang' || tx.status == 'Terjual').length;
 
     // Distribusi jenis jaminan
     _jenisCount = {};
@@ -104,35 +144,89 @@ class _LaporanTabContentState extends State<LaporanTabContent> {
     return buf.toString();
   }
 
-  void _exportLaporan() async {
+  Future<void> _exportPdf() async {
     if (_filtered.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Tidak ada data untuk diekspor'), behavior: SnackBarBehavior.floating),
+        const SnackBar(content: Text('Tidak ada data untuk diekspor ke PDF'), behavior: SnackBarBehavior.floating),
+      );
+      return;
+    }
+    setState(() => _isExporting = true);
+    try {
+      final monthLabel = '${_months[_selectedMonthIndex]} $_selectedYear';
+      String branchTitle = widget.branchId != 'all'
+          ? (_branchNames[widget.branchId] ?? widget.branchId)
+          : (_selectedBranchFilter == 'all' ? 'Semua Cabang' : (_branchNames[_selectedBranchFilter] ?? _selectedBranchFilter));
+
+      final pdfFile = await LaporanPdfService.instance.generateLaporanPdf(
+        title: 'Laporan Transaksi Gadai',
+        periodeLabel: monthLabel,
+        namaCabang: branchTitle,
+        statusFilter: _selectedStatusFilter,
+        transactions: _filtered,
+        customerNames: _custNames,
+        branchNames: _branchNames,
+      );
+
+      if (!mounted) return;
+      setState(() => _isExporting = false);
+
+      if (kIsWeb) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('PDF Laporan berhasil dibuat!'), backgroundColor: Colors.green),
+        );
+      } else {
+        await Share.shareXFiles(
+          [XFile(pdfFile.path, mimeType: 'application/pdf')],
+          text: 'Laporan Gadai PDF - $monthLabel ($branchTitle)',
+        );
+      }
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _isExporting = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Gagal ekspor PDF: $e'), backgroundColor: Colors.red),
+      );
+    }
+  }
+
+  Future<void> _exportExcel() async {
+    if (_filtered.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Tidak ada data untuk diekspor ke Excel'), behavior: SnackBarBehavior.floating),
       );
       return;
     }
     setState(() => _isExporting = true);
     try {
       final monthLabel = '${_months[_selectedMonthIndex]}_$_selectedYear';
-      final fileName = 'laporan_gadai_${monthLabel.toLowerCase()}.csv';
+      final statusSuffix = _selectedStatusFilter == 'Semua' ? '' : '_${_selectedStatusFilter.toLowerCase()}';
+      final fileName = 'laporan_gadai_${monthLabel.toLowerCase()}$statusSuffix.csv';
 
       final buf = StringBuffer();
-      buf.writeln('Tanggal,No Kontrak,Kategori,Merk,Model,Pokok,Jasa Titip,Status');
+      buf.writeln('No,Tanggal,No Kontrak,Cabang,Nasabah,Kategori,Merk,Model,Pokok,Jasa Titip,Jatuh Tempo,Status');
 
-      for (final tx in _filtered) {
+      for (int i = 0; i < _filtered.length; i++) {
+        final tx = _filtered[i];
         final d = tx.dateApplied;
-        final date = '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+        final due = tx.dateDue;
+        final dateStr = '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+        final dueStr = '${due.year}-${due.month.toString().padLeft(2, '0')}-${due.day.toString().padLeft(2, '0')}';
+        final custName = _custNames[tx.customerId] ?? '-';
+        final branchName = _branchNames[tx.cabangId] ?? tx.cabangId;
+
         buf.writeln(
-          '$date,${tx.displayCode},${tx.collateralType},"${tx.brand}","${tx.model}",${tx.principal},${tx.totalFee},${tx.status}',
+          '${i + 1},$dateStr,${tx.displayCode},"$branchName","$custName",${tx.collateralType},"${tx.brand}","${tx.model}",${tx.principal},${tx.totalFee},$dueStr,${tx.status}',
         );
       }
 
       if (kIsWeb) {
-        // Flutter Web: trigger download via browser
-        await _webDownloadCsv(buf.toString(), fileName);
+        _showWebExportDialog(buf.toString(), fileName);
       } else {
-        // Mobile/Desktop: simpan ke dokumen lokal
-        await _nativeWriteCsv(buf.toString(), fileName);
+        final dir = await getTemporaryDirectory();
+        final file = File('${dir.path}/$fileName');
+        await file.writeAsString(buf.toString());
+        await Share.shareXFiles([XFile(file.path)], text: 'Laporan Gadai Excel/CSV - $fileName');
       }
 
       if (!mounted) return;
@@ -148,14 +242,9 @@ class _LaporanTabContentState extends State<LaporanTabContent> {
       if (!mounted) return;
       setState(() => _isExporting = false);
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Gagal ekspor: $e'), backgroundColor: Colors.red),
+        SnackBar(content: Text('Gagal ekspor Excel: $e'), backgroundColor: Colors.red),
       );
     }
-  }
-
-  /// Download CSV di browser (Flutter Web) — tampilkan dialog untuk copy-paste
-  Future<void> _webDownloadCsv(String content, String fileName) async {
-    _showWebExportDialog(content, fileName);
   }
 
   void _showWebExportDialog(String csvContent, String fileName) {
@@ -166,7 +255,7 @@ class _LaporanTabContentState extends State<LaporanTabContent> {
           children: [
             const Icon(Icons.download_rounded, color: AppColors.primary),
             const SizedBox(width: 8),
-            const Text('Ekspor CSV', style: TextStyle(fontSize: 16)),
+            const Text('Ekspor Excel (CSV)', style: TextStyle(fontSize: 16)),
           ],
         ),
         content: Column(
@@ -185,11 +274,8 @@ class _LaporanTabContentState extends State<LaporanTabContent> {
                 border: Border.all(color: const Color(0xFFE2E8F0)),
               ),
               child: SingleChildScrollView(
-                padding: const EdgeInsets.all(8),
-                child: SelectableText(
-                  csvContent,
-                  style: const TextStyle(fontSize: 10, fontFamily: 'monospace'),
-                ),
+                padding: const EdgeInsets.all(10),
+                child: SelectableText(csvContent, style: const TextStyle(fontFamily: 'monospace', fontSize: 11)),
               ),
             ),
           ],
@@ -199,12 +285,6 @@ class _LaporanTabContentState extends State<LaporanTabContent> {
         ],
       ),
     );
-  }
-
-  /// Simpan CSV ke filesystem lokal (mobile/desktop) — fallback ke dialog
-  Future<void> _nativeWriteCsv(String content, String fileName) async {
-    // Fallback: tampilkan dialog copy-paste karena path_provider tidak dikonfigurasi
-    _showWebExportDialog(content, fileName);
   }
 
   @override
@@ -217,7 +297,7 @@ class _LaporanTabContentState extends State<LaporanTabContent> {
           decoration: const BoxDecoration(
             color: Color(0xFF93C5FD),
           ),
-          padding: const EdgeInsets.only(bottom: 24, left: 20, right: 20),
+          padding: const EdgeInsets.only(bottom: 24, left: 20, right: 20, top: 12),
           child: Column(
             children: [
               // Date switcher
@@ -250,7 +330,7 @@ class _LaporanTabContentState extends State<LaporanTabContent> {
                   ],
                 ),
               ),
-              const SizedBox(height: 20),
+              const SizedBox(height: 16),
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceAround,
                 children: ['Harian', 'Mingguan', 'Bulanan'].map((range) {
@@ -291,70 +371,140 @@ class _LaporanTabContentState extends State<LaporanTabContent> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      // Tombol Ekspor CSV
-                      ElevatedButton.icon(
-                        onPressed: _isExporting ? null : _exportLaporan,
-                        icon: _isExporting
-                            ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                            : const Icon(Icons.download_rounded, color: Colors.white),
-                        label: Text(
-                          _isExporting ? 'Mengekspor...' : 'Ekspor Laporan Bulanan (CSV)',
-                          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                      // Filter Cabang (jika Super Admin / branchId == 'all')
+                      if (widget.branchId == 'all') ...[
+                        const Text(
+                          'Filter Cabang',
+                          style: TextStyle(color: AppColors.textDark, fontSize: 13, fontWeight: FontWeight.bold),
                         ),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFF2563EB),
-                          minimumSize: const Size(double.infinity, 48),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                          elevation: 0,
+                        const SizedBox(height: 8),
+                        SingleChildScrollView(
+                          scrollDirection: Axis.horizontal,
+                          child: Row(
+                            children: [
+                              _buildBranchChip('all', 'Semua Cabang'),
+                              ..._branches.map((b) => _buildBranchChip(b.id, b.nama)),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 20),
+                      ],
+
+                      // Filter Status Laporan
+                      const Text(
+                        'Kategori Laporan Status',
+                        style: TextStyle(color: AppColors.textDark, fontSize: 13, fontWeight: FontWeight.bold),
+                      ),
+                      const SizedBox(height: 8),
+                      SingleChildScrollView(
+                        scrollDirection: Axis.horizontal,
+                        child: Row(
+                          children: ['Semua', 'Aktif', 'Menunggu Pengambilan', 'Sudah Diambil', 'Lunas', 'Macet', 'Lelang', 'Terjual'].map((s) {
+                            final active = _selectedStatusFilter == s;
+                            Color chipColor;
+                            switch (s) {
+                              case 'Aktif': chipColor = AppColors.primary; break;
+                              case 'Menunggu Pengambilan': chipColor = const Color(0xFF059669); break;
+                              case 'Sudah Diambil': chipColor = const Color(0xFF0D9488); break;
+                              case 'Lunas': chipColor = const Color(0xFF10B981); break;
+                              case 'Macet': chipColor = const Color(0xFFEF4444); break;
+                              case 'Lelang': chipColor = const Color(0xFF8B5CF6); break;
+                              case 'Terjual': chipColor = const Color(0xFFD97706); break;
+                              default: chipColor = const Color(0xFF64748B);
+                            }
+                            return GestureDetector(
+                              onTap: () {
+                                setState(() {
+                                  _selectedStatusFilter = s;
+                                  _computeStats();
+                                });
+                              },
+                              child: Container(
+                                margin: const EdgeInsets.only(right: 8),
+                                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                                decoration: BoxDecoration(
+                                  color: active ? chipColor : const Color(0xFFF1F5F9),
+                                  borderRadius: BorderRadius.circular(20),
+                                  border: Border.all(color: active ? chipColor : const Color(0xFFE2E8F0)),
+                                ),
+                                child: Text(
+                                  s,
+                                  style: TextStyle(
+                                    color: active ? Colors.white : const Color(0xFF475569),
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ),
+                            );
+                          }).toList(),
                         ),
                       ),
-                      const SizedBox(height: 16),
+                      const SizedBox(height: 20),
 
-                      // Kartu Ringkasan Jasa Titip
-                      Container(
-                        width: double.infinity,
-                        padding: const EdgeInsets.all(20),
-                        decoration: BoxDecoration(
-                          gradient: const LinearGradient(
-                            colors: [Color(0xFF1E3A8A), Color(0xFF1D4ED8)],
-                            begin: Alignment.topLeft,
-                            end: Alignment.bottomRight,
+                      // Tombol Ekspor PDF & Excel
+                      Row(
+                        children: [
+                          Expanded(
+                            child: ElevatedButton.icon(
+                              onPressed: _isExporting ? null : _exportPdf,
+                              icon: const Icon(Icons.picture_as_pdf_rounded, color: Colors.white, size: 18),
+                              label: const Text('Export PDF', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13)),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: const Color(0xFFDC2626),
+                                minimumSize: const Size(double.infinity, 48),
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                elevation: 0,
+                              ),
+                            ),
                           ),
-                          borderRadius: BorderRadius.circular(20),
-                          boxShadow: [
-                            BoxShadow(color: const Color(0xFF1D4ED8).withValues(alpha: 0.2), blurRadius: 12, offset: const Offset(0, 6)),
-                          ],
-                        ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const Text('Total Jasa Titip Terkumpul', style: TextStyle(color: Color(0xFF93C5FD), fontSize: 13, fontWeight: FontWeight.w500)),
-                            const SizedBox(height: 6),
-                            Text(
-                              _filtered.isEmpty ? 'Rp 0' : 'Rp ${_fmtCurrency(_totalJasaTitip)}',
-                              style: const TextStyle(color: Colors.white, fontSize: 26, fontWeight: FontWeight.bold),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: ElevatedButton.icon(
+                              onPressed: _isExporting ? null : _exportExcel,
+                              icon: const Icon(Icons.table_chart_rounded, color: Colors.white, size: 18),
+                              label: const Text('Export Excel', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13)),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: const Color(0xFF16A34A),
+                                minimumSize: const Size(double.infinity, 48),
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                elevation: 0,
+                              ),
                             ),
-                            const SizedBox(height: 4),
-                            Text(
-                              '${_filtered.length} Transaksi · Pokok: Rp ${_fmtCurrency(_totalPokok)}',
-                              style: const TextStyle(color: Color(0xFF93C5FD), fontSize: 12),
-                            ),
-                            const SizedBox(height: 14),
-                            Wrap(
-                              spacing: 8,
-                              runSpacing: 8,
-                              children: [
-                                _buildSummaryBadge(const Color(0xFF10B981), '$_lunasCount Lunas'),
-                                _buildSummaryBadge(const Color(0xFFF59E0B), '$_aktifCount Aktif'),
-                                _buildSummaryBadge(const Color(0xFFEF4444), '$_macetCount Macet'),
-                              ],
-                            ),
-                          ],
-                        ),
+                          ),
+                        ],
                       ),
                       const SizedBox(height: 24),
 
-                      // Tren Transaksi (Bar Chart Mingguan)
+                      // Metric Summary Cards
+                      Row(
+                        children: [
+                          Expanded(
+                            child: _buildMetricCard('Total Jasa Titip', 'Rp ${_fmtCurrency(_totalJasaTitip)}', const Color(0xFF10B981), Icons.payments_outlined),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: _buildMetricCard('Total Pokok Gadai', 'Rp ${_fmtCurrency(_totalPokok)}', AppColors.primary, Icons.account_balance_outlined),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 16),
+
+                      // Status Distribution Row
+                      Row(
+                        children: [
+                          Expanded(child: _buildMiniStat('Lunas', '$_lunasCount', const Color(0xFF10B981))),
+                          const SizedBox(width: 8),
+                          Expanded(child: _buildMiniStat('Aktif', '$_aktifCount', AppColors.primary)),
+                          const SizedBox(width: 8),
+                          Expanded(child: _buildMiniStat('Macet', '$_macetCount', const Color(0xFFEF4444))),
+                          const SizedBox(width: 8),
+                          Expanded(child: _buildMiniStat('Lelang', '$_lelangCount', const Color(0xFF8B5CF6))),
+                        ],
+                      ),
+                      const SizedBox(height: 24),
+
+                      // Tren Mingguan
                       Container(
                         width: double.infinity,
                         padding: const EdgeInsets.all(20),
@@ -366,17 +516,9 @@ class _LaporanTabContentState extends State<LaporanTabContent> {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                              children: [
-                                const Text('Tren Transaksi per Minggu', style: TextStyle(color: AppColors.textDark, fontSize: 15, fontWeight: FontWeight.bold)),
-                                Icon(Icons.trending_up_rounded, color: const Color(0xFF1D4ED8).withValues(alpha: 0.8), size: 20),
-                              ],
-                            ),
-                            const SizedBox(height: 28),
-                            _filtered.isEmpty
-                                ? const Center(child: Text('Belum ada data bulan ini', style: TextStyle(color: AppColors.textMuted)))
-                                : _buildBarChart(),
+                            const Text('Tren Transaksi Mingguan', style: TextStyle(color: AppColors.textDark, fontSize: 15, fontWeight: FontWeight.bold)),
+                            const SizedBox(height: 20),
+                            SizedBox(height: 140, child: _buildBarChart()),
                           ],
                         ),
                       ),
@@ -407,16 +549,16 @@ class _LaporanTabContentState extends State<LaporanTabContent> {
                       // Daftar Transaksi Bulan Ini
                       if (_filtered.isNotEmpty) ...[
                         Text(
-                          'Transaksi ${_months[_selectedMonthIndex]} $_selectedYear (${_filtered.length})',
+                          'Transaksi ${_selectedStatusFilter == 'Semua' ? '' : '($_selectedStatusFilter) '}${_months[_selectedMonthIndex]} $_selectedYear (${_filtered.length})',
                           style: const TextStyle(color: AppColors.textDark, fontSize: 15, fontWeight: FontWeight.bold),
                         ),
                         const SizedBox(height: 12),
-                        ..._filtered.take(10).map((tx) => _buildTxRow(tx)),
-                        if (_filtered.length > 10)
+                        ..._filtered.take(15).map((tx) => _buildTxRow(tx)),
+                        if (_filtered.length > 15)
                           Padding(
                             padding: const EdgeInsets.only(top: 8),
                             child: Center(
-                              child: Text('+${_filtered.length - 10} transaksi lainnya (ekspor CSV untuk lihat semua)',
+                              child: Text('+${_filtered.length - 15} transaksi lainnya (ekspor PDF/Excel untuk lihat semua)',
                                   style: const TextStyle(color: AppColors.textMuted, fontSize: 12)),
                             ),
                           ),
@@ -441,6 +583,78 @@ class _LaporanTabContentState extends State<LaporanTabContent> {
                 ),
         ),
       ],
+    );
+  }
+
+  Widget _buildBranchChip(String id, String name) {
+    final active = _selectedBranchFilter == id;
+    return GestureDetector(
+      onTap: () {
+        setState(() {
+          _selectedBranchFilter = id;
+          _computeStats();
+        });
+      },
+      child: Container(
+        margin: const EdgeInsets.only(right: 8),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+        decoration: BoxDecoration(
+          color: active ? const Color(0xFF1E3A6E) : const Color(0xFFF1F5F9),
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: active ? const Color(0xFF1E3A6E) : const Color(0xFFE2E8F0)),
+        ),
+        child: Text(
+          name,
+          style: TextStyle(
+            color: active ? Colors.white : const Color(0xFF475569),
+            fontSize: 12,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildMetricCard(String title, String val, Color col, IconData icon) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(icon, color: col, size: 18),
+              const SizedBox(width: 6),
+              Expanded(child: Text(title, style: const TextStyle(color: AppColors.textMuted, fontSize: 11, fontWeight: FontWeight.bold), maxLines: 1, overflow: TextOverflow.ellipsis)),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Text(val, style: TextStyle(color: col, fontSize: 15, fontWeight: FontWeight.w800)),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildMiniStat(String label, String count, Color color) {
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: color.withValues(alpha: 0.2)),
+      ),
+      child: Column(
+        children: [
+          Text(count, style: TextStyle(color: color, fontSize: 16, fontWeight: FontWeight.bold)),
+          const SizedBox(height: 2),
+          Text(label, style: TextStyle(color: color, fontSize: 11, fontWeight: FontWeight.w600)),
+        ],
+      ),
     );
   }
 
@@ -472,7 +686,11 @@ class _LaporanTabContentState extends State<LaporanTabContent> {
     Color statusColor;
     if (tx.status == 'Lunas') statusColor = const Color(0xFF10B981);
     else if (tx.status == 'Macet') statusColor = const Color(0xFFEF4444);
+    else if (tx.status == 'Lelang' || tx.status == 'Terjual') statusColor = const Color(0xFF8B5CF6);
     else statusColor = AppColors.primary;
+
+    final custName = _custNames[tx.customerId] ?? '';
+    final branchName = _branchNames[tx.cabangId] ?? tx.cabangId;
 
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
@@ -488,8 +706,19 @@ class _LaporanTabContentState extends State<LaporanTabContent> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(tx.displayCode, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: AppColors.textDark)),
-                Text('${tx.brand} ${tx.model}', style: const TextStyle(fontSize: 12, color: AppColors.textMuted)),
+                Row(
+                  children: [
+                    Text(tx.displayCode, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: AppColors.textDark)),
+                    const SizedBox(width: 8),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1.5),
+                      decoration: BoxDecoration(color: const Color(0xFFF1F5F9), borderRadius: BorderRadius.circular(4)),
+                      child: Text(branchName, style: const TextStyle(color: Color(0xFF64748B), fontSize: 10, fontWeight: FontWeight.w600)),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 2),
+                Text('${tx.brand} ${tx.model}${custName.isNotEmpty ? " • $custName" : ""}', style: const TextStyle(fontSize: 12, color: AppColors.textMuted)),
               ],
             ),
           ),
@@ -539,21 +768,6 @@ class _LaporanTabContentState extends State<LaporanTabContent> {
           ],
         );
       }),
-    );
-  }
-
-  Widget _buildSummaryBadge(Color dotColor, String label) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-      decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.15), borderRadius: BorderRadius.circular(20)),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Container(width: 8, height: 8, decoration: BoxDecoration(color: dotColor, shape: BoxShape.circle)),
-          const SizedBox(width: 8),
-          Text(label, style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w600)),
-        ],
-      ),
     );
   }
 

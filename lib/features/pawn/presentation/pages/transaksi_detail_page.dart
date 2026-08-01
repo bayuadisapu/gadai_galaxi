@@ -1,11 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:galaxi_gadai/core/constants/app_colors.dart';
-import 'package:galaxi_gadai/core/data/mock_data.dart';
+import 'package:galaxi_gadai/core/data/data_models.dart';
 import 'package:galaxi_gadai/core/services/supabase_gadai_service.dart';
 import 'package:galaxi_gadai/features/pawn/presentation/pages/extension_page.dart';
 import 'package:galaxi_gadai/features/pawn/presentation/pages/redemption_page.dart';
 import 'package:galaxi_gadai/core/config/system_config.dart';
+import 'package:galaxi_gadai/core/services/gadai_thermal_print_service.dart';
+import 'package:galaxi_gadai/core/services/perjanjian_pdf_service.dart';
+import 'package:galaxi_gadai/core/widgets/gadai_print_settings_page.dart';
+import 'package:share_plus/share_plus.dart';
 
 class TransaksiDetailPage extends StatefulWidget {
   final PawnTransaction transaction;
@@ -18,6 +22,7 @@ class TransaksiDetailPage extends StatefulWidget {
 class _TransaksiDetailPageState extends State<TransaksiDetailPage> {
   Customer? _customer;
   List<ExtensionHistory> _extensions = [];
+  LelangHistory? _lelangHistory;
   late PawnTransaction _tx;
 
   @override
@@ -30,13 +35,21 @@ class _TransaksiDetailPageState extends State<TransaksiDetailPage> {
   Future<void> _loadRelatedData() async {
     final svc = SupabaseGadaiService.instance;
     try {
-      final customers = await svc.fetchNasabah();
+      final customer = await svc.fetchNasabahById(widget.transaction.customerId);
       final extensions = await svc.fetchExtensionHistory(widget.transaction.id);
+      final lelangList = await svc.fetchLelangHistory();
+      LelangHistory? myLelang;
+      for (final h in lelangList) {
+        if (h.transactionId == widget.transaction.id) {
+          myLelang = h;
+          break;
+        }
+      }
       if (!mounted) return;
       setState(() {
-        _customer = customers.firstWhere((c) => c.id == widget.transaction.customerId,
-          orElse: () => Customer(id: '', name: 'Tidak Dikenal', nik: '', birthPlace: '', birthDate: '', gender: '', phone: '', address: ''));
+        _customer = customer ?? Customer(id: '', name: 'Tidak Dikenal', nik: '', birthPlace: '', birthDate: '', gender: '', phone: '', address: '');
         _extensions = extensions;
+        _lelangHistory = myLelang;
       });
     } catch (_) {}
   }
@@ -59,6 +72,201 @@ class _TransaksiDetailPageState extends State<TransaksiDetailPage> {
   String _formatDateShort(DateTime date) {
     final months = ['Jan','Feb','Mar','Apr','Mei','Jun','Jul','Agt','Sep','Okt','Nov','Des'];
     return '${date.day.toString().padLeft(2, '0')} ${months[date.month - 1]} ${date.year}';
+  }
+
+  // ── THERMAL PRINT & PDF SHARE ──
+  Future<void> _showPrintOptions() async {
+    if (!mounted) return;
+    // Langsung tampilkan pilihan — tidak perlu cek printer dulu
+    await showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      builder: (ctx) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 16, 20, 20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Center(
+                child: Container(
+                  width: 40, height: 4,
+                  decoration: BoxDecoration(
+                      color: const Color(0xFFCBD5E1),
+                      borderRadius: BorderRadius.circular(2)),
+                ),
+              ),
+              const SizedBox(height: 16),
+              const Row(
+                children: [
+                  Icon(Icons.print_rounded, color: AppColors.primary, size: 20),
+                  SizedBox(width: 8),
+                  Text('Cetak / Bagikan Struk',
+                      style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                          color: AppColors.textDark)),
+                ],
+              ),
+              const SizedBox(height: 16),
+              // Opsi 1: Share PDF
+              _PrintOptionTile(
+                icon: Icons.picture_as_pdf_rounded,
+                color: const Color(0xFFEF4444),
+                title: 'Bagikan PDF',
+                subtitle: 'Generate PDF lalu share ke WhatsApp / email',
+                onTap: () async {
+                  Navigator.pop(ctx);
+                  await _doSharePdf();
+                },
+              ),
+              const SizedBox(height: 8),
+              // Opsi 2: Cetak Bluetooth
+              _PrintOptionTile(
+                icon: Icons.assignment_rounded,
+                color: AppColors.primary,
+                title: 'Cetak ke Printer Bluetooth',
+                subtitle: 'Struk thermal (hubungkan printer dulu)',
+                onTap: () async {
+                  Navigator.pop(ctx);
+                  await _doPrintBluetooth('perjanjian');
+                },
+              ),
+              const SizedBox(height: 8),
+              _PrintOptionTile(
+                icon: Icons.receipt_long_rounded,
+                color: const Color(0xFF8B5CF6),
+                title: 'Cetak Salinan (Copy)',
+                subtitle: 'Struk thermal dengan label SALINAN',
+                onTap: () async {
+                  Navigator.pop(ctx);
+                  await _doPrintBluetooth('salinan');
+                },
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  // ── SHARE PDF ──
+  Future<void> _doSharePdf() async {
+    final customer = _customer ?? Customer(
+      id: '', name: 'Nasabah', nik: '-', birthPlace: '', birthDate: '',
+      gender: '', phone: '-', address: '');
+    try {
+      // Ambil nama petugas
+      final staff = await SupabaseGadaiService.instance.getCurrentStaff();
+      final petugasName = staff?['nama'] ?? 'Admin';
+
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+        content: Text('⏳ Membuat PDF...'),
+        duration: Duration(seconds: 2),
+        behavior: SnackBarBehavior.floating,
+      ));
+
+      final pdfFile = await PerjanjianPdfService.instance.generatePerjanjianPdf(
+        tx: _tx,
+        customer: customer,
+        petugasName: petugasName,
+      );
+
+      if (!mounted) return;
+      final xFile = XFile(pdfFile.path, mimeType: 'application/pdf');
+      await Share.shareXFiles(
+        [xFile],
+        text: 'Perjanjian Gadai - ${_tx.transactionCode.isNotEmpty ? _tx.transactionCode : _tx.id.substring(0, 10).toUpperCase()}',
+        subject: 'Perjanjian Gadai - GALAXI GADAI',
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text('❌ Gagal buat PDF: $e'),
+        backgroundColor: const Color(0xFFEF4444),
+        behavior: SnackBarBehavior.floating,
+      ));
+    }
+  }
+
+  // ── BLUETOOTH PRINT ──
+  Future<void> _doPrintBluetooth(String type) async {
+    final printSvc = GadaiThermalPrintService.instance;
+    final isConnected = await printSvc.ensureConnected();
+    if (!mounted) return;
+
+    if (!isConnected) {
+      final go = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          title: const Row(
+            children: [
+              Icon(Icons.print_disabled_rounded, color: Color(0xFF94A3B8), size: 22),
+              SizedBox(width: 8),
+              Text('Printer Belum Terhubung',
+                  style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold)),
+            ],
+          ),
+          content: const Text(
+            'Printer thermal belum terhubung. Buka pengaturan untuk menghubungkan printer Bluetooth terlebih dahulu.',
+            style: TextStyle(fontSize: 13),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Batal'),
+            ),
+            ElevatedButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.primary,
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                elevation: 0,
+              ),
+              child: const Text('Buka Pengaturan'),
+            ),
+          ],
+        ),
+      );
+      if (go == true && mounted) {
+        await Navigator.push(
+          context,
+          MaterialPageRoute(builder: (_) => const GadaiPrintSettingsPage()),
+        );
+      }
+      return;
+    }
+
+    final customer = _customer ?? Customer(
+      id: '', name: 'Nasabah', nik: '-', birthPlace: '', birthDate: '',
+      gender: '', phone: '-', address: '');
+    bool ok = false;
+    try {
+      switch (type) {
+        case 'perjanjian':
+          ok = await printSvc.printPerjanjianGadai(_tx, customer);
+          break;
+        case 'salinan':
+          ok = await printSvc.printPerjanjianGadai(_tx, customer, copyLabel: 'Salinan');
+          break;
+      }
+    } catch (_) {
+      ok = false;
+    }
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: Text(
+        ok ? '🖨️ Struk berhasil dicetak!' : '❌ Gagal cetak. Cek koneksi printer.',
+        style: const TextStyle(color: Colors.white),
+      ),
+      backgroundColor: ok ? AppColors.primary : const Color(0xFFEF4444),
+      behavior: SnackBarBehavior.floating,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+    ));
   }
 
   // ── CANCEL GADAI ──
@@ -120,19 +328,41 @@ class _TransaksiDetailPageState extends State<TransaksiDetailPage> {
           ),
           ElevatedButton(
             onPressed: () async {
+              final reason = reasonController.text.trim();
               try {
                 await SupabaseGadaiService.instance.updateTransactionStatus(widget.transaction.id, 'Dibatalkan');
-              } catch (_) {}
-              Navigator.pop(ctx);
-              setState(() {});
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text('Transaksi berhasil dibatalkan'),
-                  backgroundColor: Color(0xFFEF4444),
-                  behavior: SnackBarBehavior.floating,
-                ),
-              );
-              Navigator.pop(context);
+                
+                final staff = await SupabaseGadaiService.instance.getCurrentStaff();
+                final staffId = staff?['nama'] ?? 'Admin';
+                final staffRole = staff?['role'] ?? 'admin_cabang';
+                await SupabaseGadaiService.instance.logTransaksiCancelled(
+                  userId: staffId,
+                  role: staffRole,
+                  txId: widget.transaction.id,
+                  reason: reason.isNotEmpty ? reason : 'Tidak ada alasan khusus',
+                );
+                if (!ctx.mounted) return;
+                Navigator.pop(ctx);
+                if (!mounted) return;
+                setState(() => _tx.status = 'Dibatalkan');
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('Transaksi berhasil dibatalkan'),
+                    backgroundColor: Color(0xFFEF4444),
+                    behavior: SnackBarBehavior.floating,
+                  ),
+                );
+                Navigator.pop(context);
+              } catch (e) {
+                if (!ctx.mounted) return;
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text('Gagal membatalkan: $e'),
+                    backgroundColor: Colors.red,
+                    behavior: SnackBarBehavior.floating,
+                  ),
+                );
+              }
             },
             style: ElevatedButton.styleFrom(
               backgroundColor: const Color(0xFFEF4444),
@@ -244,11 +474,11 @@ class _TransaksiDetailPageState extends State<TransaksiDetailPage> {
               TextField(
                 controller: nominalCtrl,
                 keyboardType: TextInputType.number,
-                inputFormatters: [FilteringTextInputFormatter.digitsOnly],
                 decoration: dec('Contoh: 1.000.000', prefix: 'Rp '),
                 style: const TextStyle(fontSize: 14, color: AppColors.primary, fontWeight: FontWeight.w600),
                 onChanged: (v) {
-                  final val = int.tryParse(v) ?? 0;
+                  final cleanVal = v.replaceAll('.', '');
+                  final val = int.tryParse(cleanVal) ?? 0;
                   final formatted = fmtNum(val);
                   nominalCtrl.value = TextEditingValue(
                       text: formatted, selection: TextSelection.collapsed(offset: formatted.length));
@@ -279,14 +509,44 @@ class _TransaksiDetailPageState extends State<TransaksiDetailPage> {
 
                     final int daily = SystemConfig.calculateDailyFee(newPrincipal);
                     final int newTotalFee = daily * newDays;
+                    // Hitung newDue dari dateApplied + newDays agar jatuh tempo
+                    // selalu dihitung dari tanggal gadai pertama kali
                     final newDue = tx.dateApplied.add(Duration(days: newDays));
 
+                    final newBrand = merkCtrl.text.trim().isNotEmpty ? merkCtrl.text.trim() : tx.brand;
+                    final newModel = modelCtrl.text.trim().isNotEmpty ? modelCtrl.text.trim() : tx.model;
+                    final newCondition = kondisiCtrl.text.trim().isNotEmpty ? kondisiCtrl.text.trim() : tx.condition;
+
                     try {
+                      // Hitung perubahan untuk log
+                      final Map<String, dynamic> changes = {};
+                      final List<String> descriptions = [];
+                      if (newBrand != tx.brand) {
+                        changes['brand'] = {'old': tx.brand, 'new': newBrand};
+                        descriptions.add('Merk: ${tx.brand} ➔ $newBrand');
+                      }
+                      if (newModel != tx.model) {
+                        changes['model'] = {'old': tx.model, 'new': newModel};
+                        descriptions.add('Model: ${tx.model} ➔ $newModel');
+                      }
+                      if (newCondition != tx.condition) {
+                        changes['condition'] = {'old': tx.condition, 'new': newCondition};
+                        descriptions.add('Kondisi: ${tx.condition} ➔ $newCondition');
+                      }
+                      if (newPrincipal != tx.principal) {
+                        changes['principal'] = {'old': tx.principal, 'new': newPrincipal};
+                        descriptions.add('Nominal: Rp ${fmtNum(tx.principal)} ➔ Rp ${fmtNum(newPrincipal)}');
+                      }
+                      if (newDays != tx.periodDays) {
+                        changes['periodDays'] = {'old': tx.periodDays, 'new': newDays};
+                        descriptions.add('Tenor: ${tx.periodDays} Hari ➔ $newDays Hari');
+                      }
+
                       await SupabaseGadaiService.instance.updateTransactionDetails(
                         tx.id,
-                        brand: merkCtrl.text.trim().isNotEmpty ? merkCtrl.text.trim() : tx.brand,
-                        model: modelCtrl.text.trim().isNotEmpty ? modelCtrl.text.trim() : tx.model,
-                        condition: kondisiCtrl.text.trim().isNotEmpty ? kondisiCtrl.text.trim() : tx.condition,
+                        brand: newBrand,
+                        model: newModel,
+                        condition: newCondition,
                         principal: newPrincipal,
                         periodDays: newDays,
                         dailyFee: daily,
@@ -294,19 +554,50 @@ class _TransaksiDetailPageState extends State<TransaksiDetailPage> {
                         totalRepayment: newPrincipal + newTotalFee,
                         dateDue: newDue,
                       );
+
+                      if (changes.isNotEmpty) {
+                        final desc = 'Ubah data: ${descriptions.join(", ")}';
+                        final staff = await SupabaseGadaiService.instance.getCurrentStaff();
+                        final staffId = staff?['nama'] ?? 'Admin';
+                        final staffRole = staff?['role'] ?? 'admin_cabang';
+                        await SupabaseGadaiService.instance.logTransaksiUpdated(
+                          userId: staffId,
+                          role: staffRole,
+                          txId: tx.id,
+                          description: desc,
+                          changes: changes,
+                        );
+                      }
+
                       // Reload data dari Supabase agar UI update
                       final refreshed = await SupabaseGadaiService.instance.fetchTransactionById(tx.id);
                       if (refreshed != null && mounted) setState(() => _tx = refreshed);
-                    } catch (_) {}
-                    Navigator.pop(ctx);
-                    setState(() {});
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('Data transaksi berhasil diperbarui'),
-                        backgroundColor: AppColors.primary,
-                        behavior: SnackBarBehavior.floating,
-                      ),
-                    );
+
+                      // Bug Fix: pop + snackbar hanya jika berhasil (masuk di dalam try)
+                      if (ctx.mounted) {
+                        Navigator.pop(ctx);
+                      }
+                      if (mounted) {
+                        setState(() {});
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('Data transaksi berhasil diperbarui'),
+                            backgroundColor: AppColors.primary,
+                            behavior: SnackBarBehavior.floating,
+                          ),
+                        );
+                      }
+                    } catch (e) {
+                      if (mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text('Gagal memperbarui: $e'),
+                            backgroundColor: Colors.red,
+                            behavior: SnackBarBehavior.floating,
+                          ),
+                        );
+                      }
+                    }
                   },
                   icon: const Icon(Icons.save_rounded, color: Colors.white, size: 18),
                   label: const Text('Simpan Perubahan',
@@ -348,6 +639,8 @@ class _TransaksiDetailPageState extends State<TransaksiDetailPage> {
       statusColor = const Color(0xFF6B7280); statusBg = const Color(0xFFF3F4F6);
     } else if (tx.status == 'Perlu_Bayar_Jatip') {
       statusColor = const Color(0xFFF59E0B); statusBg = const Color(0xFFFFF7ED);
+    } else if (tx.status == 'Lelang' || tx.status == 'Terjual') {
+      statusColor = const Color(0xFF8B5CF6); statusBg = const Color(0xFFF5F3FF);
     }
 
     final extensionHistory = _extensions;
@@ -365,6 +658,11 @@ class _TransaksiDetailPageState extends State<TransaksiDetailPage> {
         title: Text(tx.displayCode,
             style: const TextStyle(color: AppColors.primary, fontWeight: FontWeight.bold, fontSize: 16)),
         actions: [
+          IconButton(
+            icon: const Icon(Icons.print_rounded, color: AppColors.primary),
+            tooltip: 'Cetak Struk',
+            onPressed: _showPrintOptions,
+          ),
           if (isActive)
             IconButton(
               icon: const Icon(Icons.edit_rounded, color: AppColors.primary),
@@ -530,6 +828,17 @@ class _TransaksiDetailPageState extends State<TransaksiDetailPage> {
                   const SizedBox(height: 8),
                   _row('Jatuh Tempo', _formatDate(tx.dateDue),
                       valueColor: isOverdue ? const Color(0xFFEF4444) : AppColors.textDark),
+                  if (tx.status == 'Lelang' || tx.status == 'Terjual') ...[
+                    const SizedBox(height: 8),
+                    _row('Status', 'Dilelang / Terjual', valueColor: const Color(0xFF8B5CF6)),
+                    if (_lelangHistory != null) ...[
+                      const SizedBox(height: 8),
+                      _row('Harga Terjual', 'Rp ${_formatCurrency(_lelangHistory!.hargaLelang)}',
+                          valueColor: const Color(0xFF8B5CF6)),
+                      const SizedBox(height: 8),
+                      _row('Tanggal Lelang', _formatDate(_lelangHistory!.tglLelang)),
+                    ],
+                  ],
                   if (isOverdue) ...[
                     const SizedBox(height: 8),
                     Container(
@@ -631,6 +940,23 @@ class _TransaksiDetailPageState extends State<TransaksiDetailPage> {
               ),
               const SizedBox(height: 10),
 
+              // Row 1.5: Cetak Struk
+              SizedBox(
+                width: double.infinity,
+                child: OutlinedButton.icon(
+                  onPressed: _showPrintOptions,
+                  icon: const Icon(Icons.print_rounded, size: 18),
+                  label: const Text('Cetak Struk Gadai'),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: AppColors.primary,
+                    side: const BorderSide(color: AppColors.primary),
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 10),
+
               // Row 2: Ubah Data + Batalkan
               Row(
                 children: [
@@ -672,6 +998,70 @@ class _TransaksiDetailPageState extends State<TransaksiDetailPage> {
     );
   }
 
+}
+
+// Helper widget untuk opsi cetak di bottom sheet
+class _PrintOptionTile extends StatelessWidget {
+  final IconData icon;
+  final Color color;
+  final String title;
+  final String subtitle;
+  final VoidCallback onTap;
+
+  const _PrintOptionTile({
+    required this.icon,
+    required this.color,
+    required this.title,
+    required this.subtitle,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(12),
+      child: Container(
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: color.withValues(alpha: 0.06),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: color.withValues(alpha: 0.3)),
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 40, height: 40,
+              decoration: BoxDecoration(
+                color: color.withValues(alpha: 0.12),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(icon, color: color, size: 20),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(title,
+                      style: TextStyle(
+                          color: color, fontSize: 14, fontWeight: FontWeight.bold)),
+                  const SizedBox(height: 2),
+                  Text(subtitle,
+                      style: const TextStyle(
+                          color: AppColors.textMuted, fontSize: 11)),
+                ],
+              ),
+            ),
+            Icon(Icons.chevron_right_rounded, color: color, size: 20),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+extension _TransaksiDetailPageExt on _TransaksiDetailPageState {
   Widget _row(String label, String value, {Color? valueColor}) {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,

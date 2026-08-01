@@ -13,6 +13,7 @@ class SystemConfig {
   }
 }
 
+// Saldo Rekening Gadai — integrasi Supabase
 class TenantWallet {
   static int balance = 7000;
   static List<Map<String, dynamic>> mutations = [

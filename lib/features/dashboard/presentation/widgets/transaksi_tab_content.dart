@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:galaxi_gadai/core/constants/app_colors.dart';
-import 'package:galaxi_gadai/core/data/mock_data.dart';
+import 'package:galaxi_gadai/core/data/data_models.dart';
 import 'package:galaxi_gadai/features/pawn/presentation/pages/extension_page.dart';
 import 'package:galaxi_gadai/features/pawn/presentation/pages/redemption_page.dart';
 import 'package:galaxi_gadai/features/pawn/presentation/pages/transaksi_detail_page.dart';
@@ -123,9 +123,12 @@ class _TransaksiTabContentState extends State<TransaksiTabContent> {
             children: [
               _buildTxFilterTab('Semua'),
               _buildTxFilterTab('Aktif'),
+              _buildTxFilterTab('Menunggu Pengambilan'),
+              _buildTxFilterTab('Sudah Diambil'),
               _buildTxFilterTab('Lunas'),
               _buildTxFilterTab('Macet'),
-              _buildTxFilterTab('Perlu_Bayar_Jatip'),
+              _buildTxFilterTab('Lelang'),
+              _buildTxFilterTab('Terjual'),
             ],
           ),
         ),
@@ -160,6 +163,7 @@ class _TransaksiTabContentState extends State<TransaksiTabContent> {
                     Color statusBg = const Color(0xFFEFF6FF);
                     if (tx.status == 'Macet') { statusColor = const Color(0xFFEF4444); statusBg = const Color(0xFFFEF2F2); }
                     else if (tx.status == 'Lunas') { statusColor = const Color(0xFF10B981); statusBg = const Color(0xFFECFDF5); }
+                    else if (tx.status == 'Lelang' || tx.status == 'Terjual') { statusColor = const Color(0xFF8B5CF6); statusBg = const Color(0xFFF5F3FF); }
                     else if (tx.status == 'Perlu_Bayar_Jatip') { statusColor = const Color(0xFFF59E0B); statusBg = const Color(0xFFFFF7ED); }
 
                     IconData collIcon = Icons.phone_android_rounded;

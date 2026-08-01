@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:galaxi_gadai/core/constants/app_colors.dart';
-import 'package:galaxi_gadai/core/data/mock_data.dart';
+import 'package:galaxi_gadai/core/data/data_models.dart';
 import '../pages/nasabah_transaksi_detail_page.dart';
 
 class NasabahHomeTab extends StatelessWidget {
@@ -192,7 +192,7 @@ class NasabahHomeTab extends StatelessWidget {
                 child: GestureDetector(
                   onTap: () => Navigator.push(
                     context,
-                    MaterialPageRoute(builder: (context) => NasabahTransaksiDetailPage(transaction: tx)),
+                    MaterialPageRoute(builder: (context) => NasabahTransaksiDetailPage(transaction: tx, customer: customer)),
                   ),
                   child: Container(
                     padding: const EdgeInsets.all(18),

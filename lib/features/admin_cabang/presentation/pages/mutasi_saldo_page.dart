@@ -60,7 +60,7 @@ class _MutasiSaldoPageState extends State<MutasiSaldoPage> {
     return Scaffold(
       backgroundColor: const Color(0xFFF8FAFC),
       appBar: AppBar(
-        title: Text('Mutasi Saldo Tenant', style: GoogleFonts.poppins(color: const Color(0xFF0A1628), fontWeight: FontWeight.bold, fontSize: 18)),
+        title: Text('Mutasi Rekening Gadai', style: GoogleFonts.poppins(color: const Color(0xFF0A1628), fontWeight: FontWeight.bold, fontSize: 18)),
         backgroundColor: const Color(0xFF93C5FD),
         iconTheme: const IconThemeData(color: Color(0xFF0A1628)),
         actions: [
@@ -115,27 +115,30 @@ class _MutasiSaldoPageState extends State<MutasiSaldoPage> {
                                   border: Border.all(color: const Color(0xFFE2E8F0)),
                                 ),
                                 child: Row(
-                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                   children: [
-                                    Column(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
-                                      children: [
-                                        Text(
-                                          item['desc'] as String,
-                                          style: const TextStyle(fontWeight: FontWeight.bold, color: AppColors.textDark),
-                                        ),
-                                        const SizedBox(height: 4),
-                                        Text(
-                                          _formatDate(item['date'] as DateTime),
-                                          style: const TextStyle(color: AppColors.textMuted, fontSize: 11),
-                                        ),
-                                      ],
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          Text(
+                                            item['desc'] as String,
+                                            style: const TextStyle(fontWeight: FontWeight.bold, color: AppColors.textDark, fontSize: 13),
+                                          ),
+                                          const SizedBox(height: 4),
+                                          Text(
+                                            _formatDate(item['date'] as DateTime),
+                                            style: const TextStyle(color: AppColors.textMuted, fontSize: 11),
+                                          ),
+                                        ],
+                                      ),
                                     ),
+                                    const SizedBox(width: 12),
                                     Text(
                                       '${isKredit ? '+' : '-'} Rp ${_formatCurrency(item['amount'] as int)}',
                                       style: TextStyle(
                                         fontWeight: FontWeight.bold,
                                         color: isKredit ? const Color(0xFF10B981) : const Color(0xFFEF4444),
+                                        fontSize: 13,
                                       ),
                                     ),
                                   ],

@@ -1,9 +1,10 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:galaxi_gadai/core/constants/app_colors.dart';
-import 'package:galaxi_gadai/core/data/mock_data.dart';
+import 'package:galaxi_gadai/core/data/data_models.dart';
 import 'package:galaxi_gadai/core/services/supabase_gadai_service.dart';
 import 'nasabah_login_page.dart';
+import 'package:galaxi_gadai/features/nasabah/presentation/pages/nasabah_dashboard_page.dart';
 
 class RegisterPage extends StatefulWidget {
   const RegisterPage({super.key});
@@ -93,18 +94,22 @@ class _RegisterPageState extends State<RegisterPage> {
         created.phone,
       ));
 
+      // Auto login setelah registrasi berhasil
+      await _svc.saveNasabahSession(created.id);
+
       if (!mounted) return;
       setState(() => _isLoading = false);
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Akun berhasil dibuat! Silakan login.'),
+          content: Text('Akun berhasil dibuat! Selamat datang.'),
           backgroundColor: Color(0xFF10B981),
           behavior: SnackBarBehavior.floating,
         ),
       );
-      Navigator.pushReplacement(
+      Navigator.pushAndRemoveUntil(
         context,
-        MaterialPageRoute(builder: (context) => const NasabahLoginPage()),
+        MaterialPageRoute(builder: (context) => NasabahDashboardPage(customer: created)),
+        (route) => false,
       );
     } catch (e) {
       if (!mounted) return;

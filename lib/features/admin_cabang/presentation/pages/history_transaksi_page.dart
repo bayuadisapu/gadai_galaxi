@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:galaxi_gadai/core/data/mock_data.dart';
+import 'package:galaxi_gadai/core/data/data_models.dart';
 import 'package:galaxi_gadai/core/services/supabase_gadai_service.dart';
 import 'package:galaxi_gadai/core/constants/app_colors.dart';
 import 'package:galaxi_gadai/features/pawn/presentation/pages/transaksi_detail_page.dart';
@@ -18,6 +18,7 @@ class _HistoryTransaksiPageState extends State<HistoryTransaksiPage> {
   List<PawnTransaction> _txs = [];
   List<Customer> _customers = [];
   bool _isLoading = true;
+  String _selectedFilter = 'Semua';
 
   @override
   void initState() {
@@ -59,6 +60,12 @@ class _HistoryTransaksiPageState extends State<HistoryTransaksiPage> {
 
   @override
   Widget build(BuildContext context) {
+    final filteredTxs = _txs.where((tx) {
+      if (_selectedFilter == 'Semua') return true;
+      if (_selectedFilter == 'Lelang') return tx.status == 'Lelang' || tx.status == 'Terjual';
+      return tx.status == _selectedFilter;
+    }).toList();
+
     return Scaffold(
       backgroundColor: const Color(0xFFF8FAFC),
       appBar: AppBar(
@@ -68,94 +75,145 @@ class _HistoryTransaksiPageState extends State<HistoryTransaksiPage> {
       ),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
-          : _txs.isEmpty
-              ? const Center(child: Text('Belum ada riwayat transaksi.'))
-              : RefreshIndicator(
-                  onRefresh: _loadData,
-                  child: ListView.separated(
-                    padding: const EdgeInsets.all(20),
-                    itemCount: _txs.length,
-                    separatorBuilder: (_, __) => const SizedBox(height: 12),
-                    itemBuilder: (context, i) {
-                      final tx = _txs[i];
-                      final c = _customers.firstWhere((cust) => cust.id == tx.customerId,
-                          orElse: () => Customer(id: '', name: 'Tidak Dikenal', nik: '', phone: '', address: '', birthPlace: '', birthDate: '', gender: ''));
-                      
-                      Color statusColor = AppColors.primary;
-                      if (tx.status == 'Lunas') statusColor = const Color(0xFF10B981);
-                      else if (tx.status == 'Macet') statusColor = const Color(0xFFEF4444);
-                      else if (tx.status == 'Terjual') statusColor = const Color(0xFF8B5CF6);
-                      else if (tx.status == 'Dibatalkan') statusColor = Colors.grey;
-
-                      return GestureDetector(
-                        onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => TransaksiDetailPage(transaction: tx))).then((_) => _loadData()),
-                        child: Container(
-                          padding: const EdgeInsets.all(16),
-                          decoration: BoxDecoration(
-                            color: Colors.white,
-                            borderRadius: BorderRadius.circular(16),
-                            border: Border.all(color: const Color(0xFFE2E8F0)),
+          : Column(
+              children: [
+                // Filter chips/categories horizontal view
+                Container(
+                  padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+                  color: Colors.white,
+                  child: SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: Row(
+                      children: ['Semua', 'Aktif', 'Menunggu Pengambilan', 'Sudah Diambil', 'Lunas', 'Macet', 'Lelang', 'Terjual'].map((s) {
+                        final active = _selectedFilter == s;
+                        Color chipColor;
+                        switch (s) {
+                          case 'Aktif': chipColor = AppColors.primary; break;
+                          case 'Menunggu Pengambilan': chipColor = const Color(0xFF059669); break;
+                          case 'Sudah Diambil': chipColor = const Color(0xFF0D9488); break;
+                          case 'Lunas': chipColor = const Color(0xFF10B981); break;
+                          case 'Macet': chipColor = const Color(0xFFEF4444); break;
+                          case 'Lelang': chipColor = const Color(0xFF8B5CF6); break;
+                          case 'Terjual': chipColor = const Color(0xFFD97706); break;
+                          default: chipColor = const Color(0xFF64748B);
+                        }
+                        return GestureDetector(
+                          onTap: () => setState(() => _selectedFilter = s),
+                          child: Container(
+                            margin: const EdgeInsets.only(right: 8),
+                            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                            decoration: BoxDecoration(
+                              color: active ? chipColor : const Color(0xFFF1F5F9),
+                              borderRadius: BorderRadius.circular(20),
+                              border: Border.all(color: active ? chipColor : const Color(0xFFE2E8F0)),
+                            ),
+                            child: Text(
+                              s,
+                              style: TextStyle(
+                                color: active ? Colors.white : const Color(0xFF475569),
+                                fontSize: 12,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
                           ),
-                          child: Row(
-                            children: [
-                              Container(
-                                width: 44,
-                                height: 44,
-                                decoration: BoxDecoration(
-                                  color: statusColor.withValues(alpha: 0.1),
-                                  shape: BoxShape.circle,
-                                ),
-                                child: Icon(Icons.history_rounded, color: statusColor, size: 22),
-                              ),
-                              const SizedBox(width: 14),
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      '${tx.brand} ${tx.model}',
-                                      style: const TextStyle(fontWeight: FontWeight.bold, color: AppColors.textDark, fontSize: 14),
-                                    ),
-                                    const SizedBox(height: 4),
-                                    Text(
-                                      'Nasabah: ${c.name}',
-                                      style: const TextStyle(color: AppColors.textMuted, fontSize: 12),
-                                    ),
-                                    Text(
-                                      'Tanggal: ${_formatDate(tx.dateApplied)}',
-                                      style: const TextStyle(color: AppColors.textMuted, fontSize: 11),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                              Column(
-                                crossAxisAlignment: CrossAxisAlignment.end,
-                                children: [
-                                  Text(
-                                    'Rp ${_formatCurrency(tx.principal)}',
-                                    style: const TextStyle(fontWeight: FontWeight.bold, color: AppColors.textDark, fontSize: 13),
-                                  ),
-                                  const SizedBox(height: 4),
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                                    decoration: BoxDecoration(
-                                      color: statusColor.withValues(alpha: 0.1),
-                                      borderRadius: BorderRadius.circular(8),
-                                    ),
-                                    child: Text(
-                                      tx.status,
-                                      style: TextStyle(color: statusColor, fontSize: 10, fontWeight: FontWeight.bold),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ],
-                          ),
-                        ),
-                      );
-                    },
+                        );
+                      }).toList(),
+                    ),
                   ),
                 ),
+                // Transactions list
+                Expanded(
+                  child: filteredTxs.isEmpty
+                      ? Center(child: Text('Tidak ada transaksi dengan status $_selectedFilter.'))
+                      : RefreshIndicator(
+                          onRefresh: _loadData,
+                          child: ListView.separated(
+                            padding: const EdgeInsets.all(20),
+                            itemCount: filteredTxs.length,
+                            separatorBuilder: (_, __) => const SizedBox(height: 12),
+                            itemBuilder: (context, i) {
+                              final tx = filteredTxs[i];
+                              final c = _customers.firstWhere((cust) => cust.id == tx.customerId,
+                                  orElse: () => Customer(id: '', name: 'Tidak Dikenal', nik: '', phone: '', address: '', birthPlace: '', birthDate: '', gender: ''));
+                              
+                              Color statusColor = AppColors.primary;
+                              if (tx.status == 'Lunas') statusColor = const Color(0xFF10B981);
+                              else if (tx.status == 'Macet') statusColor = const Color(0xFFEF4444);
+                              else if (tx.status == 'Lelang' || tx.status == 'Terjual') statusColor = const Color(0xFF8B5CF6);
+                              else if (tx.status == 'Dibatalkan') statusColor = Colors.grey;
+
+                              return GestureDetector(
+                                onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => TransaksiDetailPage(transaction: tx))).then((_) => _loadData()),
+                                child: Container(
+                                  padding: const EdgeInsets.all(16),
+                                  decoration: BoxDecoration(
+                                    color: Colors.white,
+                                    borderRadius: BorderRadius.circular(16),
+                                    border: Border.all(color: const Color(0xFFE2E8F0)),
+                                  ),
+                                  child: Row(
+                                    children: [
+                                      Container(
+                                        width: 44,
+                                        height: 44,
+                                        decoration: BoxDecoration(
+                                          color: statusColor.withValues(alpha: 0.1),
+                                          shape: BoxShape.circle,
+                                        ),
+                                        child: Icon(Icons.history_rounded, color: statusColor, size: 22),
+                                      ),
+                                      const SizedBox(width: 14),
+                                      Expanded(
+                                        child: Column(
+                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                          children: [
+                                            Text(
+                                              '${tx.brand} ${tx.model}',
+                                              style: const TextStyle(fontWeight: FontWeight.bold, color: AppColors.textDark, fontSize: 14),
+                                            ),
+                                            const SizedBox(height: 4),
+                                            Text(
+                                              'Nasabah: ${c.name}',
+                                              style: const TextStyle(color: AppColors.textMuted, fontSize: 12),
+                                            ),
+                                            Text(
+                                              'Tanggal: ${_formatDate(tx.dateApplied)}',
+                                              style: const TextStyle(color: AppColors.textMuted, fontSize: 11),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                      Column(
+                                        crossAxisAlignment: CrossAxisAlignment.end,
+                                        children: [
+                                          Text(
+                                            'Rp ${_formatCurrency(tx.principal)}',
+                                            style: const TextStyle(fontWeight: FontWeight.bold, color: AppColors.textDark, fontSize: 13),
+                                          ),
+                                          const SizedBox(height: 4),
+                                          Container(
+                                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                            decoration: BoxDecoration(
+                                              color: statusColor.withValues(alpha: 0.1),
+                                              borderRadius: BorderRadius.circular(8),
+                                            ),
+                                            child: Text(
+                                              tx.status == 'Terjual' ? 'Lelang' : tx.status,
+                                              style: TextStyle(color: statusColor, fontSize: 10, fontWeight: FontWeight.bold),
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              );
+                            },
+                          ),
+                        ),
+                ),
+              ],
+            ),
     );
   }
 }

@@ -1,8 +1,10 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:galaxi_gadai/core/constants/app_colors.dart';
-import 'package:galaxi_gadai/core/data/mock_data.dart';
+import 'package:galaxi_gadai/core/data/data_models.dart';
 import 'package:galaxi_gadai/core/services/supabase_gadai_service.dart';
+import 'package:galaxi_gadai/core/services/gadai_thermal_print_service.dart';
+import 'package:galaxi_gadai/core/widgets/gadai_print_settings_page.dart';
 
 class ExtensionPage extends StatefulWidget {
   final String? prefilledTxId;
@@ -97,11 +99,13 @@ class _ExtensionPageState extends State<ExtensionPage> {
   void _processExtension(PawnTransaction tx) async {
     final days = _selectedExtensionPeriod == '15 Hari' ? 15 : 30;
     final oldDueDate = tx.dateDue;
-    final jatipDibayar = tx.totalFee;
+    // Bug Fix: jatipDibayar = dailyFee * days (biaya tenor baru)
+    // bukan tx.totalFee yang merupakan akumulasi fee sebelumnya
+    final newTotalFee = tx.dailyFee * days;
+    final jatipDibayar = newTotalFee;
     // Jika macet, hitung dari hari ini (bukan dari dateDue yang sudah lewat)
     final baseDate = tx.dateDue.isBefore(DateTime.now()) ? DateTime.now() : tx.dateDue;
     final newDueDate = baseDate.add(Duration(days: days));
-    final newTotalFee = tx.dailyFee * days;
     final newTotalRepayment = tx.principal + newTotalFee;
 
     try {
@@ -122,6 +126,9 @@ class _ExtensionPageState extends State<ExtensionPage> {
       // Log perpanjangan tenor
       unawaited(_svc.logExtensionRequested(tx.customerId, tx.id));
 
+      // Perpanjangan cash — tambah saldo kas/rekening cabang
+      unawaited(_svc.walletTopUp(tx.cabangId, jatipDibayar, 'Jatip Perpanjangan - ${tx.brand} ${tx.model} (${tx.displayCode}) Cash'));
+
       if (!mounted) return;
       _showSuccessDialog(tx, days);
     } catch (e) {
@@ -131,76 +138,163 @@ class _ExtensionPageState extends State<ExtensionPage> {
   }
 
   void _showSuccessDialog(PawnTransaction tx, int days) {
+    // Buat ExtensionHistory sementara untuk struk (sudah disimpan ke DB)
+    final extForPrint = ExtensionHistory(
+      id: '',
+      transactionId: tx.id,
+      jatipDibayar: tx.dailyFee * days,
+      tglPerpanjangan: DateTime.now(),
+      tglTempoLama: tx.dateDue.subtract(Duration(days: days)),
+      tglTempoBaru: tx.dateDue,
+    );
+    final txCustomer = _getCustomerForTx(tx);
+
     showDialog(
       context: context,
       barrierDismissible: false,
       builder: (BuildContext context) {
-        return Dialog(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-          child: Padding(
-            padding: const EdgeInsets.all(24),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Container(
-                  width: 68,
-                  height: 68,
-                  decoration: const BoxDecoration(
-                    color: Color(0xFFECFDF5),
-                    shape: BoxShape.circle,
-                  ),
-                  child: const Icon(
-                    Icons.check_circle_rounded,
-                    color: Color(0xFF10B981),
-                    size: 40,
-                  ),
-                ),
-                const SizedBox(height: 20),
-                const Text(
-                  'Perpanjangan Sukses!',
-                  style: TextStyle(
-                    color: AppColors.textDark,
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                const SizedBox(height: 10),
-                Text(
-                  'Tenor transaksi ${tx.displayCode} berhasil diperpanjang +$days hari.\nJatuh tempo baru: ${_formatIndonesianDate(tx.dateDue)}.',
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(
-                    color: AppColors.textMuted,
-                    fontSize: 13.5,
-                  ),
-                ),
-                const SizedBox(height: 24),
-                SizedBox(
-                  width: double.infinity,
-                  height: 48,
-                  child: ElevatedButton(
-                    onPressed: () {
-                      Navigator.pop(context); // Close Dialog
-                      Navigator.pop(context); // Back to previous page
-                    },
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: AppColors.primary,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
+        bool isPrinting = false;
+        return StatefulBuilder(
+          builder: (ctx, setDialogState) {
+            return Dialog(
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+              child: Padding(
+                padding: const EdgeInsets.all(24),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Container(
+                      width: 68,
+                      height: 68,
+                      decoration: const BoxDecoration(
+                        color: Color(0xFFECFDF5),
+                        shape: BoxShape.circle,
                       ),
-                      elevation: 0,
+                      child: const Icon(
+                        Icons.check_circle_rounded,
+                        color: Color(0xFF10B981),
+                        size: 40,
+                      ),
                     ),
-                    child: const Text(
-                      'Selesai',
+                    const SizedBox(height: 20),
+                    const Text(
+                      'Perpanjangan Sukses!',
                       style: TextStyle(
-                        color: Colors.white,
+                        color: AppColors.textDark,
+                        fontSize: 18,
                         fontWeight: FontWeight.bold,
                       ),
                     ),
-                  ),
+                    const SizedBox(height: 10),
+                    Text(
+                      'Tenor transaksi ${tx.displayCode} berhasil diperpanjang +$days hari.\nJatuh tempo baru: ${_formatIndonesianDate(tx.dateDue)}.',
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(
+                        color: AppColors.textMuted,
+                        fontSize: 13.5,
+                      ),
+                    ),
+                    const SizedBox(height: 24),
+                    // Tombol cetak struk perpanjangan
+                    SizedBox(
+                      width: double.infinity,
+                      height: 44,
+                      child: OutlinedButton.icon(
+                        onPressed: isPrinting
+                            ? null
+                            : () async {
+                                final printSvc = GadaiThermalPrintService.instance;
+                                final isConnected = await printSvc.ensureConnected();
+                                if (!isConnected) {
+                                  if (!mounted) return;
+                                  Navigator.pop(ctx);
+                                  Navigator.pop(context);
+                                  if (mounted) {
+                                    await Navigator.push(
+                                      context,
+                                      MaterialPageRoute(
+                                          builder: (_) => const GadaiPrintSettingsPage()),
+                                    );
+                                  }
+                                  return;
+                                }
+                                setDialogState(() => isPrinting = true);
+                                final customer = txCustomer ??
+                                    Customer(
+                                        id: '', name: tx.brand, nik: '-',
+                                        birthPlace: '', birthDate: '',
+                                        gender: '', phone: '-', address: '');
+                                final ok = await printSvc.printPerpanjangan(
+                                    tx, customer, extForPrint);
+                                setDialogState(() => isPrinting = false);
+                                if (mounted) {
+                                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                                    content: Text(
+                                      ok
+                                          ? '🖨️ Struk perpanjangan dicetak!'
+                                          : '❌ Gagal cetak struk.',
+                                      style: const TextStyle(color: Colors.white),
+                                    ),
+                                    backgroundColor: ok
+                                        ? AppColors.primary
+                                        : const Color(0xFFEF4444),
+                                    behavior: SnackBarBehavior.floating,
+                                    shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(10)),
+                                  ));
+                                }
+                              },
+                        icon: isPrinting
+                            ? const SizedBox(
+                                width: 16,
+                                height: 16,
+                                child: CircularProgressIndicator(
+                                    strokeWidth: 2, color: AppColors.primary),
+                              )
+                            : const Icon(Icons.print_rounded,
+                                size: 18, color: AppColors.primary),
+                        label: Text(
+                          isPrinting ? 'Mencetak...' : 'Cetak Struk Perpanjangan',
+                          style: const TextStyle(
+                              color: AppColors.primary, fontWeight: FontWeight.w600),
+                        ),
+                        style: OutlinedButton.styleFrom(
+                          side: const BorderSide(color: AppColors.primary),
+                          shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12)),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    SizedBox(
+                      width: double.infinity,
+                      height: 48,
+                      child: ElevatedButton(
+                        onPressed: () {
+                          Navigator.pop(context); // Close Dialog
+                          Navigator.pop(context); // Back to previous page
+                        },
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: AppColors.primary,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          elevation: 0,
+                        ),
+                        child: const Text(
+                          'Selesai',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
-              ],
-            ),
-          ),
+              ),
+            );
+          },
         );
       },
     );
@@ -216,9 +310,12 @@ class _ExtensionPageState extends State<ExtensionPage> {
     int dueFee = 0;
     DateTime newDueDate = DateTime.now();
     if (currentTx != null) {
-      dueFee = currentTx.totalFee; // JTlama
       final days = _selectedExtensionPeriod == '15 Hari' ? 15 : 30;
-      newDueDate = currentTx.dateDue.add(Duration(days: days));
+      // Konsisten dengan _processExtension: jatip yg dibayar = dailyFee × hari tenor baru
+      dueFee = currentTx.dailyFee * days;
+      // Jika macet (dateDue sudah lewat), hitung dari hari ini — konsisten dengan _processExtension
+      final baseDate = currentTx.dateDue.isBefore(DateTime.now()) ? DateTime.now() : currentTx.dateDue;
+      newDueDate = baseDate.add(Duration(days: days));
     }
 
     return Scaffold(
@@ -369,7 +466,7 @@ class _ExtensionPageState extends State<ExtensionPage> {
                               mainAxisAlignment: MainAxisAlignment.spaceBetween,
                               children: [
                                 const Text(
-                                  'Jasa Titip Wajib Bayar',
+                                  'Jasa Titip Tenor Baru',
                                   style: TextStyle(color: AppColors.textMuted, fontSize: 13),
                                 ),
                                 Text(
@@ -380,7 +477,7 @@ class _ExtensionPageState extends State<ExtensionPage> {
                             ),
                             const SizedBox(height: 4),
                             Text(
-                              '* Sesuai aturan bisnis, biaya Jasa Titip periode sebelumnya wajib dilunasi penuh sebelum perpanjangan.',
+                              '* Biaya Jasa Titip untuk tenor perpanjangan yang dipilih. Wajib dilunasi saat proses perpanjangan.',
                               style: TextStyle(color: const Color(0xFFEF4444).withValues(alpha: 0.8), fontSize: 11),
                             ),
                             const Padding(

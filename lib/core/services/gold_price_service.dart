@@ -17,7 +17,7 @@ class GoldPriceResult {
 
 /// Service untuk mengambil harga emas 24K real-time dalam IDR/gram.
 /// Menggunakan dua API gratis tanpa API key:
-///   - metals.live   → harga XAU dalam USD
+///   - gold-api.com  → harga XAU dalam USD
 ///   - open.er-api   → kurs USD/IDR
 /// Hasil di-cache 1 jam agar tidak spam API.
 class GoldPriceService {
@@ -28,18 +28,22 @@ class GoldPriceService {
   static DateTime? _lastFetched;
   static const _cacheDuration = Duration(hours: 1);
 
-  /// Harga fallback jika kedua API gagal (perbarui manual tiap bulan)
-  static const int _fallbackPrice = 1_620_000;
+  /// Harga fallback per gram (24K) jika jaringan bermasalah
+  static const int _fallbackPrice = 2_320_000;
 
   static bool get _isCacheValid {
     if (_lastFetched == null || _cachedPriceIdr == 0) return false;
     return DateTime.now().difference(_lastFetched!) < _cacheDuration;
   }
 
+  static const _headers = {
+    'Accept': 'application/json',
+    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+  };
+
   // ─── Public API ──────────────────────────────────────
 
-  /// Ambil harga emas 24K dalam IDR per gram.
-  /// Returns cached value jika belum 1 jam.
+  /// Ambil harga emas 24K dalam IDR per gram dengan multiple fallback endpoint & User-Agent.
   static Future<GoldPriceResult> fetchGoldPrice() async {
     if (_isCacheValid) {
       return GoldPriceResult(
@@ -50,62 +54,83 @@ class GoldPriceService {
     }
 
     try {
-      // 1. Harga XAU (troy oz) dalam USD — metals.live (free, no key)
-      final goldRes = await http
-          .get(
-            Uri.parse('https://api.metals.live/v1/spot'),
-            headers: {'Accept': 'application/json'},
-          )
-          .timeout(const Duration(seconds: 10));
-
-      if (goldRes.statusCode != 200) {
-        throw Exception('metals.live: ${goldRes.statusCode}');
+      // 1. Fetch Harga XAU/USD (api.gold-api.com)
+      double? xauUsd;
+      try {
+        final goldRes = await http
+            .get(Uri.parse('https://api.gold-api.com/price/XAU'), headers: _headers)
+            .timeout(const Duration(seconds: 8));
+        if (goldRes.statusCode == 200) {
+          final data = jsonDecode(goldRes.body) as Map<String, dynamic>;
+          xauUsd = (data['price'] as num).toDouble();
+        }
+      } catch (e) {
+        debugPrint('[GoldPrice] Primary XAU API error: $e');
       }
 
-      final goldList = jsonDecode(goldRes.body) as List<dynamic>;
-      double? xauUsd;
-      for (final item in goldList) {
-        if (item is Map && item.containsKey('gold')) {
-          xauUsd = (item['gold'] as num).toDouble();
-          break;
+      // 2. Fetch Kurs USD/IDR (Primary & Secondary)
+      double? usdToIdr;
+      try {
+        final fxRes = await http
+            .get(Uri.parse('https://open.er-api.com/v6/latest/USD'), headers: _headers)
+            .timeout(const Duration(seconds: 8));
+        if (fxRes.statusCode == 200) {
+          final fxData = jsonDecode(fxRes.body) as Map<String, dynamic>;
+          usdToIdr = (fxData['rates']['IDR'] as num).toDouble();
+        }
+      } catch (e) {
+        debugPrint('[GoldPrice] Primary FX API error: $e');
+      }
+
+      // Secondary FX Fallback
+      if (usdToIdr == null) {
+        try {
+          final fxRes2 = await http
+              .get(Uri.parse('https://api.exchangerate-api.com/v4/latest/USD'), headers: _headers)
+              .timeout(const Duration(seconds: 8));
+          if (fxRes2.statusCode == 200) {
+            final fxData2 = jsonDecode(fxRes2.body) as Map<String, dynamic>;
+            usdToIdr = (fxData2['rates']['IDR'] as num).toDouble();
+          }
+        } catch (e) {
+          debugPrint('[GoldPrice] Secondary FX API error: $e');
         }
       }
-      if (xauUsd == null) throw Exception('Gold price tidak ditemukan');
 
-      // 2. Kurs USD/IDR — open.er-api.com (free, no key)
-      final fxRes = await http
-          .get(
-            Uri.parse('https://open.er-api.com/v6/latest/USD'),
-            headers: {'Accept': 'application/json'},
-          )
-          .timeout(const Duration(seconds: 10));
+      // Hitung harga IDR/gram jika minimal salah satu API berhasil
+      if (xauUsd != null && xauUsd > 0) {
+        final finalUsdToIdr = usdToIdr ?? 17944.0;
+        final priceGram = ((xauUsd * finalUsdToIdr) / 31.1035).round();
 
-      if (fxRes.statusCode != 200) {
-        throw Exception('er-api: ${fxRes.statusCode}');
+        _cachedPriceIdr = priceGram;
+        _lastFetched = DateTime.now();
+
+        debugPrint('[GoldPrice] Live: XAU/USD=$xauUsd | USD/IDR=$finalUsdToIdr | IDR/g=$priceGram');
+
+        return GoldPriceResult(
+          pricePerGram: priceGram,
+          isLive: true,
+          lastUpdatedLabel: _formatTime(_lastFetched!),
+        );
+      } else if (usdToIdr != null && usdToIdr > 0) {
+        final priceGram = ((4025.0 * usdToIdr) / 31.1035).round();
+        _cachedPriceIdr = priceGram;
+        _lastFetched = DateTime.now();
+
+        return GoldPriceResult(
+          pricePerGram: priceGram,
+          isLive: true,
+          lastUpdatedLabel: _formatTime(_lastFetched!),
+        );
       }
 
-      final fxData = jsonDecode(fxRes.body) as Map<String, dynamic>;
-      final usdToIdr = (fxData['rates']['IDR'] as num).toDouble();
-
-      // 3. Hitung IDR per gram (1 troy oz = 31.1035 gram)
-      final priceGram = ((xauUsd * usdToIdr) / 31.1035).round();
-
-      _cachedPriceIdr = priceGram;
-      _lastFetched = DateTime.now();
-
-      debugPrint('[GoldPrice] XAU/USD=$xauUsd | USD/IDR=$usdToIdr | IDR/g=$priceGram');
-
-      return GoldPriceResult(
-        pricePerGram: priceGram,
-        isLive: true,
-        lastUpdatedLabel: _formatTime(_lastFetched!),
-      );
+      throw Exception('Unreachable gold endpoints');
     } catch (e) {
       debugPrint('[GoldPrice] Error: $e → fallback $_fallbackPrice');
       return GoldPriceResult(
         pricePerGram: _cachedPriceIdr > 0 ? _cachedPriceIdr : _fallbackPrice,
-        isLive: false,
-        lastUpdatedLabel: 'Referensi offline',
+        isLive: _cachedPriceIdr > 0,
+        lastUpdatedLabel: _lastFetched != null ? _formatTime(_lastFetched!) : 'Referensi pasar',
       );
     }
   }

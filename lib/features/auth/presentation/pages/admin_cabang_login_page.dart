@@ -50,13 +50,17 @@ class _AdminCabangLoginPageState extends State<AdminCabangLoginPage> {
       final branchName = await _svc.getBranchName(account['cabangId']!);
       if (!mounted) return;
 
-      Navigator.pushReplacement(context, MaterialPageRoute(
-        builder: (_) => AdminCabangDashboardPage(
-          namaAdmin: account['nama']!,
-          namaCabang: branchName,
-          cabangId: account['cabangId']!,
+      Navigator.pushAndRemoveUntil(
+        context,
+        MaterialPageRoute(
+          builder: (_) => AdminCabangDashboardPage(
+            namaAdmin: account['nama']!,
+            namaCabang: branchName,
+            cabangId: account['cabangId']!,
+          ),
         ),
-      ));
+        (route) => false,
+      );
     } catch (e) {
       if (!mounted) return;
       setState(() { _isLoading = false; _errorMessage = 'Error: ${e.toString()}'; });

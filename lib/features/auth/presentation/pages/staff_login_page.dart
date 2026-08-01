@@ -1,13 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:galaxi_gadai/core/constants/app_colors.dart';
 import 'package:galaxi_gadai/core/services/supabase_gadai_service.dart';
-import 'package:galaxi_gadai/features/dashboard/presentation/pages/branch_dashboard_page.dart';
 import 'package:galaxi_gadai/features/admin_cabang/presentation/pages/admin_cabang_dashboard_page.dart';
 import 'package:galaxi_gadai/features/super_admin/presentation/pages/super_admin_dashboard_page.dart';
 
 class StaffLoginPage extends StatefulWidget {
   final String initialRole;
-  const StaffLoginPage({super.key, this.initialRole = 'verifikator'});
+  const StaffLoginPage({super.key, this.initialRole = 'admin_cabang'});
 
   @override
   State<StaffLoginPage> createState() => _StaffLoginPageState();
@@ -52,13 +51,18 @@ class _StaffLoginPageState extends State<StaffLoginPage> {
 
       // Pastikan role akun sesuai dengan portal yang dipilih
       final accountRole = account['role']!;
-      if (accountRole != widget.initialRole) {
-        setState(() => _errorMessage = 'Akun ini bukan untuk role ${_roleLabel(widget.initialRole)}');
+      // Jika role tidak cocok dengan portal yang dipilih, tolak login
+      // Kecuali super_admin yang bisa login dari portal manapun
+      if (accountRole != widget.initialRole && accountRole != 'super_admin') {
+        setState(() => _errorMessage = 'Akun ini bukan untuk portal ${_roleLabel(widget.initialRole)}');
         return;
       }
 
-      // Get branch name
-      final branchName = await _svc.getBranchName(account['cabangId']!);
+      // Get branch name (hanya untuk admin cabang — super_admin tidak punya cabang spesifik)
+      final cabangId = account['cabangId'] ?? '';
+      final branchName = (accountRole == 'super_admin' || cabangId == 'all' || cabangId.isEmpty)
+          ? ''
+          : await _svc.getBranchName(cabangId);
 
       if (!mounted) return;
       _navigateByRole(accountRole, account, branchName);
@@ -75,29 +79,45 @@ class _StaffLoginPageState extends State<StaffLoginPage> {
     switch (role) {
       case 'admin_cabang': return 'Admin Cabang';
       case 'super_admin': return 'Super Admin';
-      default: return 'Verifikator';
+      default: return 'Admin Cabang';
     }
   }
 
   void _navigateByRole(String role, Map<String, String> account, String branchName) {
     switch (role) {
-      case 'verifikator':
-        Navigator.pushReplacement(context, MaterialPageRoute(
-          builder: (_) => BranchDashboardPage(cabangId: account['cabangId']!),
-        ));
-        break;
       case 'admin_cabang':
-        Navigator.pushReplacement(context, MaterialPageRoute(
-          builder: (_) => AdminCabangDashboardPage(
-            namaAdmin: account['nama']!,
-            namaCabang: branchName,
-            cabangId: account['cabangId']!,
+        Navigator.pushAndRemoveUntil(
+          context,
+          MaterialPageRoute(
+            builder: (_) => AdminCabangDashboardPage(
+              namaAdmin: account['nama']!,
+              namaCabang: branchName,
+              cabangId: account['cabangId']!,
+            ),
           ),
-        ));
+          (route) => false,
+        );
         break;
       case 'super_admin':
-        Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const SuperAdminDashboardPage()));
+        Navigator.pushAndRemoveUntil(
+          context,
+          MaterialPageRoute(builder: (_) => const SuperAdminDashboardPage()),
+          (route) => false,
+        );
         break;
+      default:
+        // Fallback: default ke admin_cabang dashboard
+        Navigator.pushAndRemoveUntil(
+          context,
+          MaterialPageRoute(
+            builder: (_) => AdminCabangDashboardPage(
+              namaAdmin: account['nama'] ?? 'Admin',
+              namaCabang: branchName,
+              cabangId: account['cabangId'] ?? '',
+            ),
+          ),
+          (route) => false,
+        );
     }
   }
 

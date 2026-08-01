@@ -361,6 +361,31 @@ $$ LANGUAGE plpgsql SECURITY DEFINER;
 
 
 -- ════════════════════════════════════════════════════════════════
+-- 12. TABEL RIWAYAT LELANG
+-- ════════════════════════════════════════════════════════════════
+CREATE TABLE IF NOT EXISTS gadai_lelang_history (
+  id               UUID         PRIMARY KEY DEFAULT gen_random_uuid(),
+  transaction_id   UUID         NOT NULL REFERENCES gadai_transactions(id) ON DELETE CASCADE,
+  harga_lelang     BIGINT       NOT NULL DEFAULT 0,
+  tgl_lelang       TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
+  created_at       TIMESTAMPTZ  DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_lelang_history_tx ON gadai_lelang_history(transaction_id);
+
+ALTER TABLE gadai_lelang_history ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "LelangHistory: authenticated full access" ON gadai_lelang_history;
+DROP POLICY IF EXISTS "LelangHistory: anon read access" ON gadai_lelang_history;
+
+CREATE POLICY "LelangHistory: authenticated full access" ON gadai_lelang_history
+  FOR ALL USING (auth.role() = 'authenticated');
+  
+CREATE POLICY "LelangHistory: anon read access" ON gadai_lelang_history
+  FOR SELECT USING (true);
+
+
+-- ════════════════════════════════════════════════════════════════
 -- SELESAI
 -- Urutan eksekusi yang benar:
 --   0. branches
@@ -375,4 +400,5 @@ $$ LANGUAGE plpgsql SECURITY DEFINER;
 --   9. gadai_wallet_topup (function)
 --  10. gadai_activity_logs
 --  11. gadai_mark_overdue (function)
+--  12. gadai_lelang_history
 -- ════════════════════════════════════════════════════════════════

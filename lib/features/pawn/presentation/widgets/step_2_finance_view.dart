@@ -207,6 +207,9 @@ class Step2FinanceView extends StatelessWidget {
                 if (days == null || days <= 0) {
                   return 'Jangka waktu tidak valid';
                 }
+                if (days > SystemConfig.maxTenor) {
+                  return 'Maksimum ${SystemConfig.maxTenor} hari';
+                }
                 return null;
               },
             ),

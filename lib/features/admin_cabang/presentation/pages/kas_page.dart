@@ -88,152 +88,156 @@ class _KasPageState extends State<KasPage> {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
+      useSafeArea: true,
       backgroundColor: Colors.transparent,
-      builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setSheet) => Padding(
-          padding: EdgeInsets.only(bottom: MediaQuery.of(ctx).viewInsets.bottom),
+      builder: (sheetCtx) => StatefulBuilder(
+        builder: (builderCtx, setSheet) => Padding(
+          padding: EdgeInsets.only(bottom: MediaQuery.of(builderCtx).viewInsets.bottom),
           child: Container(
-            padding: const EdgeInsets.all(24),
+            padding: const EdgeInsets.fromLTRB(24, 16, 24, 24),
             decoration: const BoxDecoration(
               color: Colors.white,
               borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
             ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // Handle bar
-                Center(child: Container(width: 40, height: 4, decoration: BoxDecoration(color: Colors.grey.shade300, borderRadius: BorderRadius.circular(2)))),
-                const SizedBox(height: 20),
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Handle bar
+                  Center(child: Container(width: 40, height: 4, decoration: BoxDecoration(color: Colors.grey.shade300, borderRadius: BorderRadius.circular(2)))),
+                  const SizedBox(height: 20),
 
-                // Title
-                Row(children: [
-                  Container(
-                    padding: const EdgeInsets.all(8),
-                    decoration: BoxDecoration(
-                      color: isKasuk ? const Color(0xFF10B981).withValues(alpha: 0.1) : Colors.red.shade50,
-                      borderRadius: BorderRadius.circular(10),
+                  // Title
+                  Row(children: [
+                    Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: isKasuk ? const Color(0xFF10B981).withValues(alpha: 0.1) : Colors.red.shade50,
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Icon(
+                        isKasuk ? Icons.add_circle_outline_rounded : Icons.remove_circle_outline_rounded,
+                        color: isKasuk ? const Color(0xFF10B981) : Colors.red,
+                        size: 22,
+                      ),
                     ),
-                    child: Icon(
-                      isKasuk ? Icons.add_circle_outline_rounded : Icons.remove_circle_outline_rounded,
-                      color: isKasuk ? const Color(0xFF10B981) : Colors.red,
-                      size: 22,
+                    const SizedBox(width: 12),
+                    Text(
+                      isKasuk ? 'Kas Masuk' : 'Kas Keluar',
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                        color: isKasuk ? const Color(0xFF065F46) : Colors.red.shade700,
+                      ),
+                    ),
+                  ]),
+                  const SizedBox(height: 20),
+
+                  // Nominal
+                  const Text('Nominal (Rp)', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13, color: AppColors.textDark)),
+                  const SizedBox(height: 8),
+                  TextField(
+                    controller: amountCtrl,
+                    keyboardType: TextInputType.number,
+                    inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                    autofocus: true,
+                    decoration: InputDecoration(
+                      hintText: 'Contoh: 500000',
+                      prefixText: 'Rp ',
+                      filled: true,
+                      fillColor: AppColors.inputBackground,
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide(color: isKasuk ? const Color(0xFF10B981) : Colors.red, width: 1.5),
+                      ),
                     ),
                   ),
-                  const SizedBox(width: 12),
-                  Text(
-                    isKasuk ? 'Kas Masuk' : 'Kas Keluar',
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                      color: isKasuk ? const Color(0xFF065F46) : Colors.red.shade700,
+                  const SizedBox(height: 16),
+
+                  // Keterangan
+                  const Text('Keterangan', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13, color: AppColors.textDark)),
+                  const SizedBox(height: 8),
+                  TextField(
+                    controller: descCtrl,
+                    maxLines: 2,
+                    decoration: InputDecoration(
+                      hintText: isKasuk ? 'Contoh: Setoran modal awal' : 'Contoh: Beli ATK, bayar listrik...',
+                      filled: true,
+                      fillColor: AppColors.inputBackground,
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide(color: isKasuk ? const Color(0xFF10B981) : Colors.red, width: 1.5),
+                      ),
                     ),
                   ),
-                ]),
-                const SizedBox(height: 20),
+                  const SizedBox(height: 24),
 
-                // Nominal
-                const Text('Nominal (Rp)', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13, color: AppColors.textDark)),
-                const SizedBox(height: 8),
-                TextField(
-                  controller: amountCtrl,
-                  keyboardType: TextInputType.number,
-                  inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                  decoration: InputDecoration(
-                    hintText: 'Contoh: 500000',
-                    prefixText: 'Rp ',
-                    filled: true,
-                    fillColor: AppColors.inputBackground,
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
-                    focusedBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      borderSide: BorderSide(color: isKasuk ? const Color(0xFF10B981) : Colors.red, width: 1.5),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 16),
-
-                // Keterangan
-                const Text('Keterangan', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13, color: AppColors.textDark)),
-                const SizedBox(height: 8),
-                TextField(
-                  controller: descCtrl,
-                  maxLines: 2,
-                  decoration: InputDecoration(
-                    hintText: isKasuk ? 'Contoh: Setoran modal awal' : 'Contoh: Beli ATK, bayar listrik...',
-                    filled: true,
-                    fillColor: AppColors.inputBackground,
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
-                    focusedBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      borderSide: BorderSide(color: isKasuk ? const Color(0xFF10B981) : Colors.red, width: 1.5),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 24),
-
-                // Submit button
-                SizedBox(
-                  width: double.infinity,
-                  height: 52,
-                  child: ElevatedButton(
-                    onPressed: isLoading
-                        ? null
-                        : () async {
-                            final amount = int.tryParse(amountCtrl.text) ?? 0;
-                            final desc = descCtrl.text.trim();
-                            if (amount <= 0) {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(content: Text('Masukkan nominal yang valid'), backgroundColor: Colors.orange),
-                              );
-                              return;
-                            }
-                            if (desc.isEmpty) {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(content: Text('Keterangan tidak boleh kosong'), backgroundColor: Colors.orange),
-                              );
-                              return;
-                            }
-                            setSheet(() => isLoading = true);
-                            if (isKasuk) {
-                              await _svc.walletTopUp(widget.branchId, amount, desc);
-                              if (!mounted) return;
-                              Navigator.pop(ctx);
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(content: Text('✅ Kas Masuk Rp ${_fmt(amount)} dicatat'), backgroundColor: const Color(0xFF10B981)),
-                              );
-                            } else {
-                              final err = await _svc.walletDebit(widget.branchId, amount, desc);
-                              if (!mounted) return;
-                              if (err != null) {
-                                setSheet(() => isLoading = false);
+                  // Submit button
+                  SizedBox(
+                    width: double.infinity,
+                    height: 52,
+                    child: ElevatedButton(
+                      onPressed: isLoading
+                          ? null
+                          : () async {
+                              final amount = int.tryParse(amountCtrl.text) ?? 0;
+                              final desc = descCtrl.text.trim();
+                              if (amount <= 0) {
                                 ScaffoldMessenger.of(context).showSnackBar(
-                                  SnackBar(content: Text('❌ $err'), backgroundColor: Colors.red),
+                                  const SnackBar(content: Text('Masukkan nominal yang valid'), backgroundColor: Colors.orange),
                                 );
                                 return;
                               }
-                              Navigator.pop(ctx);
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(content: Text('✅ Kas Keluar Rp ${_fmt(amount)} dicatat'), backgroundColor: Colors.orange),
-                              );
-                            }
-                            _loadData();
-                          },
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: isKasuk ? const Color(0xFF10B981) : Colors.red,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                      elevation: 0,
+                              if (desc.isEmpty) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(content: Text('Keterangan tidak boleh kosong'), backgroundColor: Colors.orange),
+                                );
+                                return;
+                              }
+                              setSheet(() => isLoading = true);
+                              if (isKasuk) {
+                                await _svc.walletTopUp(widget.branchId, amount, desc);
+                                if (!mounted) return;
+                                Navigator.pop(sheetCtx);
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(content: Text('✅ Kas Masuk Rp ${_fmt(amount)} dicatat'), backgroundColor: const Color(0xFF10B981)),
+                                );
+                              } else {
+                                final err = await _svc.walletDebit(widget.branchId, amount, desc);
+                                if (!mounted) return;
+                                if (err != null) {
+                                  setSheet(() => isLoading = false);
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(content: Text('❌ $err'), backgroundColor: Colors.red),
+                                  );
+                                  return;
+                                }
+                                Navigator.pop(sheetCtx);
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(content: Text('✅ Kas Keluar Rp ${_fmt(amount)} dicatat'), backgroundColor: Colors.orange),
+                                );
+                              }
+                              _loadData();
+                            },
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: isKasuk ? const Color(0xFF10B981) : Colors.red,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                        elevation: 0,
+                      ),
+                      child: isLoading
+                          ? const SizedBox(width: 22, height: 22, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2.5))
+                          : Text(
+                              isKasuk ? 'Simpan Kas Masuk' : 'Simpan Kas Keluar',
+                              style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
+                            ),
                     ),
-                    child: isLoading
-                        ? const SizedBox(width: 22, height: 22, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2.5))
-                        : Text(
-                            isKasuk ? 'Simpan Kas Masuk' : 'Simpan Kas Keluar',
-                            style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
-                          ),
                   ),
-                ),
-                const SizedBox(height: 8),
-              ],
+                  const SizedBox(height: 8),
+                ],
+              ),
             ),
           ),
         ),

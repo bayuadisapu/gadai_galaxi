@@ -1,15 +1,19 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:galaxi_gadai/core/constants/app_colors.dart';
-import 'package:galaxi_gadai/core/data/mock_data.dart';
+import 'package:galaxi_gadai/core/data/data_models.dart';
 import 'package:galaxi_gadai/core/services/supabase_gadai_service.dart';
-import 'package:galaxi_gadai/core/services/midtrans_service.dart';
 import 'package:galaxi_gadai/core/config/system_config.dart';
-import 'package:galaxi_gadai/features/pawn/presentation/pages/midtrans_snap_page.dart';
+import 'package:galaxi_gadai/core/services/perjanjian_pdf_service.dart';
+import 'package:galaxi_gadai/features/nasabah/presentation/pages/nasabah_payment_page.dart';
+import 'package:galaxi_gadai/core/services/fcm_service.dart';
+import 'package:share_plus/share_plus.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 class NasabahTransaksiDetailPage extends StatefulWidget {
   final PawnTransaction transaction;
-  const NasabahTransaksiDetailPage({super.key, required this.transaction});
+  final Customer? customer;
+  const NasabahTransaksiDetailPage({super.key, required this.transaction, this.customer});
 
   @override
   State<NasabahTransaksiDetailPage> createState() => _NasabahTransaksiDetailPageState();
@@ -17,181 +21,144 @@ class NasabahTransaksiDetailPage extends StatefulWidget {
 
 class _NasabahTransaksiDetailPageState extends State<NasabahTransaksiDetailPage> {
   List<ExtensionHistory> _extensions = [];
+  LelangHistory? _lelangHistory;
+  RealtimeChannel? _realtimeChannel;
 
   @override
   void initState() {
     super.initState();
     _loadExtensions();
+    _subscribeToUpdates();
+  }
+
+  @override
+  void dispose() {
+    _realtimeChannel?.unsubscribe();
+    super.dispose();
+  }
+
+  void _subscribeToUpdates() {
+    _realtimeChannel = SupabaseGadaiService.instance.subscribeToTransactionUpdates(
+      txId: widget.transaction.id,
+      onUpdate: (updatedTx) {
+        if (!mounted) return;
+        final oldStatus = widget.transaction.status;
+        // Update status lokal dari Realtime
+        setState(() {
+          widget.transaction.status = updatedTx.status;
+          widget.transaction.paymentVerifiedAt = updatedTx.paymentVerifiedAt;
+          widget.transaction.paymentType = updatedTx.paymentType;
+          widget.transaction.paymentPeriodDays = updatedTx.paymentPeriodDays;
+          if (updatedTx.dateDue != widget.transaction.dateDue) {
+            widget.transaction.dateDue = updatedTx.dateDue;
+            widget.transaction.totalFee = updatedTx.totalFee;
+            widget.transaction.totalRepayment = updatedTx.totalRepayment;
+            widget.transaction.periodDays = updatedTx.periodDays;
+          }
+        });
+
+        // Trigger Notifikasi Sistem HP jika status berubah dari Menunggu Verifikasi
+        if (oldStatus == 'Menunggu Verifikasi') {
+          if (updatedTx.status == 'Aktif' || updatedTx.status == 'Menunggu Pengambilan') {
+            FcmService.instance.showPaymentVerifiedNotification(
+              txCode: updatedTx.displayCode,
+              paymentType: updatedTx.paymentType ?? (updatedTx.status == 'Menunggu Pengambilan' ? 'tebus' : 'perpanjang'),
+            );
+          } else if (updatedTx.paymentRejectReason != null && updatedTx.paymentRejectReason!.isNotEmpty) {
+            FcmService.instance.showPaymentRejectedNotification(
+              txCode: updatedTx.displayCode,
+              reason: updatedTx.paymentRejectReason,
+            );
+          }
+        }
+
+        // Reload extension history jika perpanjang dikonfirmasi
+        if (updatedTx.status == 'Aktif') _loadExtensions();
+      },
+    );
+  }
+
+  // ── SHARE PDF PERJANJIAN ──
+  Future<void> _sharePdf(PawnTransaction tx) async {
+    try {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('⏳ Membuat PDF...'), duration: Duration(seconds: 2), behavior: SnackBarBehavior.floating),
+      );
+      final customer = widget.customer ?? Customer(
+        id: tx.customerId, name: 'Nasabah', nik: '-',
+        birthPlace: '', birthDate: '', gender: '', phone: '-', address: '',
+      );
+      final pdfFile = await PerjanjianPdfService.instance.generatePerjanjianPdf(
+        tx: tx, customer: customer, petugasName: 'Admin',
+      );
+      if (!mounted) return;
+      final xFile = XFile(pdfFile.path, mimeType: 'application/pdf');
+      await Share.shareXFiles([xFile],
+        text: 'Perjanjian Gadai - ${tx.displayCode}',
+        subject: 'Perjanjian Gadai - GALAXI GADAI',
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text('❌ Gagal buat PDF: $e'),
+        backgroundColor: const Color(0xFFEF4444),
+        behavior: SnackBarBehavior.floating,
+      ));
+    }
   }
 
   Future<void> _loadExtensions() async {
     try {
-      final ext = await SupabaseGadaiService.instance.fetchExtensionHistory(widget.transaction.id);
+      final svc = SupabaseGadaiService.instance;
+      final ext = await svc.fetchExtensionHistory(widget.transaction.id);
+      final lelangList = await svc.fetchLelangHistory();
+      LelangHistory? myLelang;
+      for (final h in lelangList) {
+        if (h.transactionId == widget.transaction.id) {
+          myLelang = h;
+          break;
+        }
+      }
       if (!mounted) return;
-      setState(() => _extensions = ext);
+      setState(() {
+        _extensions = ext;
+        _lelangHistory = myLelang;
+      });
     } catch (_) {}
   }
 
-  // ── PERPANJANG VIA MIDTRANS ──
+  // ── PERPANJANG — Navigasi ke halaman pembayaran manual ──
   Future<void> _showPerpanjangSheet() async {
     final tx = widget.transaction;
     if (tx.status == 'Lunas') return;
 
-    int selectedDays = 15;
-
-    await showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setSheet) {
-          final int dailyFee = tx.dailyFee > 0 ? tx.dailyFee : SystemConfig.calculateDailyFee(tx.principal);
-          final int jatipBayar = dailyFee * selectedDays;
-          final baseDate = tx.dateDue.isBefore(DateTime.now()) ? DateTime.now() : tx.dateDue;
-          final newDue = baseDate.add(Duration(days: selectedDays));
-          final months = ['Jan','Feb','Mar','Apr','Mei','Jun','Jul','Agt','Sep','Okt','Nov','Des'];
-          final newDueFmt = '${newDue.day.toString().padLeft(2,'0')} ${months[newDue.month-1]} ${newDue.year}';
-
-          String fmt(int v) { final s=v.toString(); final b=StringBuffer(); for(int i=0;i<s.length;i++){if(i>0&&(s.length-i)%3==0)b.write('.');b.write(s[i]);}return b.toString(); }
-
-          return Padding(
-            padding: EdgeInsets.only(bottom: MediaQuery.of(ctx).viewInsets.bottom),
-            child: Container(
-              padding: const EdgeInsets.fromLTRB(24, 20, 24, 32),
-              decoration: const BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-              ),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Center(child: Container(width: 40, height: 4, decoration: BoxDecoration(color: Colors.grey.shade300, borderRadius: BorderRadius.circular(2)))),
-                  const SizedBox(height: 20),
-                  const Row(children: [
-                    Icon(Icons.update_rounded, color: AppColors.primary, size: 22),
-                    SizedBox(width: 10),
-                    Text('Perpanjang Tenor Gadai', style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold, color: AppColors.textDark)),
-                  ]),
-                  const SizedBox(height: 18),
-
-                  // Pilih durasi
-                  const Text('Pilih Durasi Perpanjangan', style: TextStyle(fontWeight: FontWeight.w600, color: AppColors.textDark, fontSize: 13)),
-                  const SizedBox(height: 10),
-                  Row(children: [15, 30].map((d) => Expanded(
-                    child: GestureDetector(
-                      onTap: () => setSheet(() => selectedDays = d),
-                      child: Container(
-                        margin: EdgeInsets.only(right: d == 15 ? 8 : 0),
-                        padding: const EdgeInsets.symmetric(vertical: 12),
-                        decoration: BoxDecoration(
-                          color: selectedDays == d ? AppColors.primary : const Color(0xFFF1F5F9),
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(color: selectedDays == d ? AppColors.primary : const Color(0xFFCBD5E1)),
-                        ),
-                        child: Column(children: [
-                          Text('$d Hari', style: TextStyle(fontWeight: FontWeight.bold, color: selectedDays == d ? Colors.white : AppColors.textDark, fontSize: 15)),
-                          Text('Rp ${fmt(dailyFee * d)}', style: TextStyle(color: selectedDays == d ? Colors.white70 : AppColors.textMuted, fontSize: 12)),
-                        ]),
-                      ),
-                    ),
-                  )).toList()),
-                  const SizedBox(height: 20),
-
-                  // Ringkasan
-                  Container(
-                    padding: const EdgeInsets.all(14),
-                    decoration: BoxDecoration(color: const Color(0xFFF8FAFC), borderRadius: BorderRadius.circular(12)),
-                    child: Column(children: [
-                      Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-                        const Text('Jasa Titip dibayar', style: TextStyle(color: AppColors.textMuted, fontSize: 13)),
-                        Text('Rp ${fmt(jatipBayar)}', style: const TextStyle(color: AppColors.textDark, fontWeight: FontWeight.bold, fontSize: 13)),
-                      ]),
-                      const SizedBox(height: 8),
-                      Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-                        const Text('Jatuh tempo baru', style: TextStyle(color: AppColors.textMuted, fontSize: 13)),
-                        Text(newDueFmt, style: const TextStyle(color: AppColors.primary, fontWeight: FontWeight.bold, fontSize: 13)),
-                      ]),
-                    ]),
-                  ),
-                  const SizedBox(height: 20),
-
-                  // Tombol Bayar
-                  SizedBox(
-                    width: double.infinity,
-                    height: 52,
-                    child: ElevatedButton.icon(
-                      onPressed: () async {
-                        Navigator.pop(ctx);
-                        await _processMidtransPayment(tx, selectedDays, jatipBayar);
-                      },
-                      icon: const Icon(Icons.payment_rounded, color: Colors.white, size: 20),
-                      label: Text('Bayar Rp ${fmt(jatipBayar)} via Midtrans', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15)),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: AppColors.primary,
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                        elevation: 0,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          );
-        },
+    await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => NasabahPaymentPage(
+          transaction: tx,
+          isRedemption: false,
+        ),
       ),
     );
+
+    // Setelah kembali, refresh data
+    if (mounted) setState(() {});
   }
 
-  Future<void> _processMidtransPayment(PawnTransaction tx, int days, int amount) async {
-    // Tampilkan loading
-    if (!mounted) return;
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (_) => const Center(child: CircularProgressIndicator(color: AppColors.primary)),
-    );
-
-    try {
-      final orderId = 'GADAI-EXT-${tx.id}-${DateTime.now().millisecondsSinceEpoch}';
-      final snap = await MidtransService.createSnapToken(
-        orderId: orderId,
-        grossAmount: amount,
-        customerName: 'Nasabah ${tx.displayCode}',
-        customerPhone: '',
-        itemName: 'Perpanjang Gadai ${tx.displayCode} ($days Hari)',
-      );
-
-      if (!mounted) return;
-      Navigator.pop(context); // tutup loading
-
-      final result = await Navigator.push<MidtransResult>(
-        context,
-        MaterialPageRoute(
-          builder: (_) => MidtransSnapPage(snapUrl: snap['redirect_url']!, orderId: orderId),
+  // ── TEBUS BARANG — Navigasi ke halaman pembayaran manual ──
+  Future<void> _showTebusSheet() async {
+    final tx = widget.transaction;
+    await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => NasabahPaymentPage(
+          transaction: tx,
+          isRedemption: true,
         ),
-      );
-
-      if (!mounted) return;
-
-      if (result == MidtransResult.success) {
-        await _applyExtension(tx, days, amount);
-      } else if (result == MidtransResult.pending) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('⏳ Pembayaran sedang diproses. Tenor akan diperbarui otomatis.'), backgroundColor: Colors.orange),
-        );
-      } else if (result == MidtransResult.failed) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('❌ Pembayaran gagal atau dibatalkan.'), backgroundColor: Colors.red),
-        );
-      }
-    } catch (e) {
-      if (!mounted) return;
-      Navigator.pop(context); // tutup loading jika masih ada
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Gagal memproses pembayaran: $e'), backgroundColor: Colors.red),
-      );
-    }
+      ),
+    );
+    if (mounted) setState(() {});
   }
 
   Future<void> _applyExtension(PawnTransaction tx, int days, int jatipBayar) async {
@@ -252,6 +219,8 @@ class _NasabahTransaksiDetailPageState extends State<NasabahTransaksiDetailPage>
     Color statusColor = AppColors.primary;
     if (tx.status == 'Macet') statusColor = const Color(0xFFEF4444);
     else if (tx.status == 'Lunas') statusColor = const Color(0xFF10B981);
+    else if (tx.status == 'Menunggu Pengambilan') statusColor = const Color(0xFF059669);
+    else if (tx.status == 'Lelang' || tx.status == 'Terjual') statusColor = const Color(0xFF8B5CF6);
 
     final extensionHistory = _extensions;
 
@@ -269,6 +238,13 @@ class _NasabahTransaksiDetailPageState extends State<NasabahTransaksiDetailPage>
           'Detail Transaksi',
           style: TextStyle(color: AppColors.primary, fontWeight: FontWeight.bold, fontSize: 18),
         ),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.picture_as_pdf_rounded, color: AppColors.primary),
+            tooltip: 'Download PDF Perjanjian',
+            onPressed: () => _sharePdf(tx),
+          ),
+        ],
       ),
       body: SingleChildScrollView(
         physics: const BouncingScrollPhysics(),
@@ -358,6 +334,52 @@ class _NasabahTransaksiDetailPageState extends State<NasabahTransaksiDetailPage>
             ),
             const SizedBox(height: 16),
 
+            // ── Banner Menunggu Verifikasi ──
+            if (tx.status == 'Menunggu Verifikasi') ...[  
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFFFBEB),
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: const Color(0xFFFCD34D)),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Row(children: [
+                      Icon(Icons.hourglass_top_rounded, color: Color(0xFFF59E0B), size: 20),
+                      SizedBox(width: 8),
+                      Text(
+                        'Menunggu Verifikasi Admin',
+                        style: TextStyle(color: Color(0xFF92400E), fontWeight: FontWeight.bold, fontSize: 14),
+                      ),
+                    ]),
+                    const SizedBox(height: 6),
+                    const Text(
+                      'Bukti transfer Anda sudah diterima. Admin sedang memverifikasi pembayaran Anda.',
+                      style: TextStyle(color: Color(0xFF78350F), fontSize: 12, height: 1.4),
+                    ),
+                    if (tx.paymentType != null) ...[  
+                      const SizedBox(height: 8),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFF59E0B).withValues(alpha: 0.15),
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: Text(
+                          tx.paymentType == 'tebus' ? '🔓 Tebus Barang' : '🔄 Perpanjang ${tx.paymentPeriodDays ?? 15} Hari',
+                          style: const TextStyle(color: Color(0xFF92400E), fontWeight: FontWeight.bold, fontSize: 11),
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+              const SizedBox(height: 16),
+            ],
+
             // Financial Details Card
             Container(
               width: double.infinity,
@@ -412,6 +434,17 @@ class _NasabahTransaksiDetailPageState extends State<NasabahTransaksiDetailPage>
                   _row('Tanggal Pengajuan', _formatDate(tx.dateApplied)),
                   const SizedBox(height: 10),
                   _row('Jatuh Tempo', _formatDate(tx.dateDue)),
+                  if (tx.status == 'Lelang' || tx.status == 'Terjual') ...[
+                    const SizedBox(height: 10),
+                    _row('Status', 'Dilelang / Terjual', valueColor: const Color(0xFF8B5CF6)),
+                    if (_lelangHistory != null) ...[
+                      const SizedBox(height: 10),
+                      _row('Harga Terjual', 'Rp ${_formatCurrency(_lelangHistory!.hargaLelang)}',
+                          valueColor: const Color(0xFF8B5CF6)),
+                      const SizedBox(height: 10),
+                      _row('Tanggal Lelang', _formatDate(_lelangHistory!.tglLelang)),
+                    ],
+                  ],
                 ],
               ),
             ),
@@ -466,33 +499,103 @@ class _NasabahTransaksiDetailPageState extends State<NasabahTransaksiDetailPage>
           ],
         ),
       ),
-      bottomNavigationBar: widget.transaction.status != 'Lunas'
-          ? SafeArea(
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(20, 12, 20, 12),
+      bottomNavigationBar: () {
+        if (tx.status == 'Lunas' || tx.status == 'Lelang' || tx.status == 'Terjual') return null;
+
+        // Menunggu Verifikasi — hanya tampilkan info, tidak ada tombol aksi
+        if (tx.status == 'Menunggu Verifikasi') {
+          return SafeArea(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(20, 12, 20, 12),
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFFFBEB),
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: const Color(0xFFFCD34D)),
+                ),
+                child: const Row(children: [
+                  Icon(Icons.hourglass_top_rounded, color: Color(0xFFF59E0B), size: 20),
+                  SizedBox(width: 10),
+                  Flexible(child: Text(
+                    '⏳ Menunggu konfirmasi admin. Harap bersabar...',
+                    style: TextStyle(color: Color(0xFF92400E), fontWeight: FontWeight.w600, fontSize: 13),
+                  )),
+                ]),
+              ),
+            ),
+          );
+        }
+
+        if (tx.status == 'Menunggu Pengambilan') {
+          return SafeArea(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(20, 12, 20, 12),
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF0FDF4),
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: const Color(0xFF059669).withValues(alpha: 0.3)),
+                ),
+                child: const Row(children: [
+                  Icon(Icons.access_time_rounded, color: Color(0xFF059669), size: 20),
+                  SizedBox(width: 10),
+                  Flexible(child: Text(
+                    '✅ Pelunasan diterima. Barang siap diambil di toko.',
+                    style: TextStyle(color: Color(0xFF059669), fontWeight: FontWeight.w600, fontSize: 13),
+                  )),
+                ]),
+              ),
+            ),
+          );
+        }
+
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(20, 12, 20, 12),
+            child: Row(children: [
+              Expanded(
                 child: ElevatedButton.icon(
                   onPressed: _showPerpanjangSheet,
-                  icon: const Icon(Icons.update_rounded, color: Colors.white, size: 20),
-                  label: const Text('Perpanjang Tenor', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),
+                  icon: const Icon(Icons.update_rounded, color: Colors.white, size: 18),
+                  label: const Text('Perpanjang', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14)),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: AppColors.primary,
-                    minimumSize: const Size(double.infinity, 52),
+                    minimumSize: const Size(0, 52),
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                     elevation: 0,
                   ),
                 ),
               ),
-            )
-          : null,
+              const SizedBox(width: 12),
+              Expanded(
+                child: ElevatedButton.icon(
+                  onPressed: _showTebusSheet,
+                  icon: const Icon(Icons.lock_open_rounded, color: Colors.white, size: 18),
+                  label: const Text('Tebus', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14)),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF059669),
+                    minimumSize: const Size(0, 52),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                    elevation: 0,
+                  ),
+                ),
+              ),
+            ]),
+          ),
+        );
+      }(),
     );
   }
 
-  Widget _row(String label, String value) {
+  Widget _row(String label, String value, {Color? valueColor}) {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
         Text(label, style: const TextStyle(color: AppColors.textMuted, fontSize: 13)),
-        Text(value, style: const TextStyle(color: AppColors.textDark, fontSize: 13, fontWeight: FontWeight.w600)),
+        Text(value,
+            style: TextStyle(color: valueColor ?? AppColors.textDark, fontSize: 13, fontWeight: FontWeight.w600)),
       ],
     );
   }

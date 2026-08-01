@@ -54,9 +54,10 @@ class _SuperAdminLoginPageState extends State<SuperAdminLoginPage> {
         return;
       }
 
-      Navigator.pushReplacement(
+      Navigator.pushAndRemoveUntil(
         context,
         MaterialPageRoute(builder: (_) => const SuperAdminDashboardPage()),
+        (route) => false,
       );
     } catch (e) {
       if (!mounted) return;

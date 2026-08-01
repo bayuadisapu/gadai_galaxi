@@ -1,7 +1,10 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:galaxi_gadai/core/constants/app_colors.dart';
-import 'package:galaxi_gadai/core/data/mock_data.dart';
+import 'package:galaxi_gadai/core/data/data_models.dart';
 import 'package:galaxi_gadai/core/services/supabase_gadai_service.dart';
+import 'package:galaxi_gadai/core/services/gadai_thermal_print_service.dart';
+import 'package:galaxi_gadai/core/widgets/gadai_print_settings_page.dart';
 
 class RedemptionPage extends StatefulWidget {
   final String? prefilledTxId;
@@ -96,6 +99,15 @@ class _RedemptionPageState extends State<RedemptionPage> {
       // Simpan ke Supabase terlebih dahulu
       await _svc.updateTransactionStatus(tx.id, 'Lunas');
       tx.redeem(); // update local state
+
+      // Bug Fix: gunakan totalRepayment dari variabel yang sudah dihitung
+      final totalRepayment = tx.principal + tx.totalFee;
+
+      // Pelunasan — tambah saldo kas/rekening cabang
+      unawaited(_svc.walletTopUp(tx.cabangId, totalRepayment, 'Pelunasan Gadai - ${tx.brand} ${tx.model} (${tx.displayCode}) Cash'));
+
+      // Log redemption
+      await _svc.logNasabahRedeemed(tx.customerId, tx.id, '${tx.brand} ${tx.model}', totalRepayment);
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -112,76 +124,156 @@ class _RedemptionPageState extends State<RedemptionPage> {
   }
 
   void _showSuccessDialog(PawnTransaction tx) {
+    // Cari customer untuk struk
+    Customer? txCustomer;
+    try {
+      txCustomer = _allCustomers.firstWhere((c) => c.id == tx.customerId);
+    } catch (_) {}
+
     showDialog(
       context: context,
       barrierDismissible: false,
       builder: (BuildContext context) {
-        return Dialog(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-          child: Padding(
-            padding: const EdgeInsets.all(24),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Container(
-                  width: 68,
-                  height: 68,
-                  decoration: const BoxDecoration(
-                    color: Color(0xFFECFDF5),
-                    shape: BoxShape.circle,
-                  ),
-                  child: const Icon(
-                    Icons.check_circle_rounded,
-                    color: Color(0xFF10B981),
-                    size: 40,
-                  ),
-                ),
-                const SizedBox(height: 20),
-                const Text(
-                  'Pelunasan Berhasil!',
-                  style: TextStyle(
-                    color: AppColors.textDark,
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                const SizedBox(height: 10),
-                Text(
-                  'Pembayaran tebusan sebesar Rp ${_formatCurrency(tx.principal + tx.totalFee)} untuk transaksi ${tx.displayCode} telah lunas.\n\nSilakan serahkan barang jaminan (${tx.brand} ${tx.model}) kembali kepada nasabah.',
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(
-                    color: AppColors.textMuted,
-                    fontSize: 13.5,
-                  ),
-                ),
-                const SizedBox(height: 24),
-                SizedBox(
-                  width: double.infinity,
-                  height: 48,
-                  child: ElevatedButton(
-                    onPressed: () {
-                      Navigator.pop(context); // Close Dialog
-                      Navigator.pop(context); // Back to previous page
-                    },
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF10B981),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
+        bool isPrinting = false;
+        return StatefulBuilder(
+          builder: (ctx, setDialogState) {
+            return Dialog(
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+              child: Padding(
+                padding: const EdgeInsets.all(24),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Container(
+                      width: 68,
+                      height: 68,
+                      decoration: const BoxDecoration(
+                        color: Color(0xFFECFDF5),
+                        shape: BoxShape.circle,
                       ),
-                      elevation: 0,
+                      child: const Icon(
+                        Icons.check_circle_rounded,
+                        color: Color(0xFF10B981),
+                        size: 40,
+                      ),
                     ),
-                    child: const Text(
-                      'Selesai & Serahkan Barang',
+                    const SizedBox(height: 20),
+                    const Text(
+                      'Pelunasan Berhasil!',
                       style: TextStyle(
-                        color: Colors.white,
+                        color: AppColors.textDark,
+                        fontSize: 18,
                         fontWeight: FontWeight.bold,
                       ),
                     ),
-                  ),
+                    const SizedBox(height: 10),
+                    Text(
+                      'Pembayaran tebusan sebesar Rp ${_formatCurrency(tx.principal + tx.totalFee)} untuk transaksi ${tx.displayCode} telah lunas.\n\nSilakan serahkan barang jaminan (${tx.brand} ${tx.model}) kembali kepada nasabah.',
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(
+                        color: AppColors.textMuted,
+                        fontSize: 13.5,
+                      ),
+                    ),
+                    const SizedBox(height: 24),
+                    // Tombol Cetak Struk
+                    SizedBox(
+                      width: double.infinity,
+                      height: 44,
+                      child: OutlinedButton.icon(
+                        onPressed: isPrinting
+                            ? null
+                            : () async {
+                                final printSvc = GadaiThermalPrintService.instance;
+                                final isConnected = await printSvc.ensureConnected();
+                                if (!isConnected) {
+                                  if (!mounted) return;
+                                  Navigator.pop(ctx);
+                                  Navigator.pop(context);
+                                  if (mounted) {
+                                    await Navigator.push(
+                                      context,
+                                      MaterialPageRoute(
+                                          builder: (_) => const GadaiPrintSettingsPage()),
+                                    );
+                                  }
+                                  return;
+                                }
+                                setDialogState(() => isPrinting = true);
+                                final customer = txCustomer ??
+                                    Customer(
+                                        id: '', name: tx.brand, nik: '-',
+                                        birthPlace: '', birthDate: '',
+                                        gender: '', phone: '-', address: '');
+                                final ok = await printSvc.printPelunasan(tx, customer);
+                                setDialogState(() => isPrinting = false);
+                                if (mounted) {
+                                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                                    content: Text(
+                                      ok ? '🖨️ Struk pelunasan dicetak!' : '❌ Gagal cetak struk.',
+                                      style: const TextStyle(color: Colors.white),
+                                    ),
+                                    backgroundColor: ok
+                                        ? const Color(0xFF10B981)
+                                        : const Color(0xFFEF4444),
+                                    behavior: SnackBarBehavior.floating,
+                                    shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(10)),
+                                  ));
+                                }
+                              },
+                        icon: isPrinting
+                            ? const SizedBox(
+                                width: 16,
+                                height: 16,
+                                child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    color: Color(0xFF10B981)),
+                              )
+                            : const Icon(Icons.print_rounded,
+                                size: 18, color: Color(0xFF10B981)),
+                        label: Text(
+                          isPrinting ? 'Mencetak...' : 'Cetak Struk Pelunasan',
+                          style: const TextStyle(
+                              color: Color(0xFF10B981), fontWeight: FontWeight.w600),
+                        ),
+                        style: OutlinedButton.styleFrom(
+                          side: const BorderSide(color: Color(0xFF10B981)),
+                          shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12)),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    SizedBox(
+                      width: double.infinity,
+                      height: 48,
+                      child: ElevatedButton(
+                        onPressed: () {
+                          Navigator.pop(context); // Close Dialog
+                          Navigator.pop(context); // Back to previous page
+                        },
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF10B981),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          elevation: 0,
+                        ),
+                        child: const Text(
+                          'Selesai & Serahkan Barang',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
-              ],
-            ),
-          ),
+              ),
+            );
+          },
         );
       },
     );

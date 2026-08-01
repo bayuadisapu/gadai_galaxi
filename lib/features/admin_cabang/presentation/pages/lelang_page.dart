@@ -1,7 +1,7 @@
 import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:galaxi_gadai/core/data/mock_data.dart';
+import 'package:galaxi_gadai/core/data/data_models.dart';
 import 'package:galaxi_gadai/core/services/supabase_gadai_service.dart';
 import 'package:galaxi_gadai/core/constants/app_colors.dart';
 import 'package:galaxi_gadai/features/pawn/presentation/pages/transaksi_detail_page.dart';
@@ -167,14 +167,33 @@ class _LelangPageState extends State<LelangPage> {
               final price = int.tryParse(priceCtrl.text) ?? 0;
               if (price <= 0) return;
               try {
-                await _svc.updateTransactionStatus(tx.id, 'Terjual');
+                // 1. Catat history lelang dulu
+                await _svc.createLelangHistory(tx.id, price);
+                // 2. Update status ke 'Lelang' (= sudah terjual via lelang)
+                await _svc.updateTransactionStatus(tx.id, 'Lelang');
+                // 3. Top up saldo rekening
                 await _svc.walletTopUp(widget.branchId, price, 'Hasil Lelang ${tx.brand} ${tx.model}');
+                
+                // Log activity
+                try {
+                  final staff = await _svc.getCurrentStaff();
+                  final staffName = staff?['nama'] ?? 'Admin';
+                  final staffRole = staff?['role'] ?? 'admin_cabang';
+                  await _svc.logTransaksiLelang(
+                    userId: staffName,
+                    role: staffRole,
+                    txId: tx.id,
+                    brandModel: '${tx.brand} ${tx.model}',
+                    price: price,
+                  );
+                } catch (_) {}
+
                 if (!ctx.mounted) return;
                 Navigator.pop(ctx);
                 _loadData();
                 if (!mounted) return;
                 ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                  content: Text('Berhasil dilelang Rp ${_formatCurrency(price)}. Saldo Tenant bertambah!'),
+                  content: Text('✅ Berhasil dijual Rp ${_formatCurrency(price)}. Saldo rekening gadai bertambah!'),
                   backgroundColor: Colors.green,
                 ));
               } catch (e) {
@@ -241,7 +260,7 @@ class _LelangPageState extends State<LelangPage> {
                                 crossAxisCount: 2,
                                 mainAxisSpacing: 14,
                                 crossAxisSpacing: 12,
-                                childAspectRatio: 0.52,
+                                childAspectRatio: 0.40,
                               ),
                               delegate: SliverChildBuilderDelegate(
                                 (ctx, i) => _buildCard(_filtered[i]),
@@ -513,13 +532,13 @@ class _LelangPageState extends State<LelangPage> {
             Stack(
               children: [
                 Container(
-                  height: 100,
+                  height: 75,
                   width: double.infinity,
                   color: const Color(0xFFEFF6FF),
                   child: Icon(
                     _itemIcon(tx.collateralType),
                     color: const Color(0xFF2563EB).withValues(alpha: 0.25),
-                    size: 56,
+                    size: 38,
                   ),
                 ),
                 Positioned(

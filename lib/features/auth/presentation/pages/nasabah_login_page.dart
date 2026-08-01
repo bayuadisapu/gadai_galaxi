@@ -46,11 +46,15 @@ class _NasabahLoginPageState extends State<NasabahLoginPage> {
       setState(() => _isLoading = false);
 
       if (customer != null) {
+        // Simpan sesi nasabah
+        await _svc.saveNasabahSession(customer.id);
         // Log aktivitas login berhasil
         unawaited(_svc.logNasabahLogin(customer.id, customer.name));
-        Navigator.pushReplacement(
+        if (!mounted) return;
+        Navigator.pushAndRemoveUntil(
           context,
           MaterialPageRoute(builder: (context) => NasabahDashboardPage(customer: customer)),
+          (route) => false,
         );
       } else {
         // Log login gagal

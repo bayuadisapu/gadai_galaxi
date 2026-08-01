@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:galaxi_gadai/core/constants/app_colors.dart';
-import 'package:galaxi_gadai/core/data/mock_data.dart';
+import 'package:galaxi_gadai/core/data/data_models.dart';
 import '../pages/nasabah_transaksi_detail_page.dart';
 
 class NasabahRiwayatTab extends StatefulWidget {
@@ -45,7 +45,7 @@ class _NasabahRiwayatTabState extends State<NasabahRiwayatTab> {
           child: ListView(
             scrollDirection: Axis.horizontal,
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-            children: ['Semua', 'Aktif', 'Lunas', 'Macet'].map((f) {
+            children: ['Semua', 'Aktif', 'Menunggu Pengambilan', 'Sudah Diambil', 'Lunas', 'Macet'].map((f) {
               final isSelected = _filter == f;
               return GestureDetector(
                 onTap: () => setState(() => _filter = f),
@@ -125,6 +125,9 @@ class _NasabahRiwayatTabState extends State<NasabahRiwayatTab> {
                     } else if (tx.status == 'Lunas') {
                       statusColor = const Color(0xFF10B981);
                       statusBg = const Color(0xFFECFDF5);
+                    } else if (tx.status == 'Lelang' || tx.status == 'Terjual') {
+                      statusColor = const Color(0xFF8B5CF6);
+                      statusBg = const Color(0xFFF5F3FF);
                     }
 
                     IconData collIcon = Icons.phone_android_rounded;
@@ -133,9 +136,9 @@ class _NasabahRiwayatTabState extends State<NasabahRiwayatTab> {
                     else if (tx.collateralType.contains('Motor') || tx.collateralType.contains('Mobil')) collIcon = Icons.two_wheeler_rounded;
 
                     return GestureDetector(
-                      onTap: () => Navigator.push(
+                    onTap: () => Navigator.push(
                         context,
-                        MaterialPageRoute(builder: (context) => NasabahTransaksiDetailPage(transaction: tx)),
+                        MaterialPageRoute(builder: (context) => NasabahTransaksiDetailPage(transaction: tx, customer: widget.customer)),
                       ).then((_) {
                         widget.onRefresh?.call();
                       }),

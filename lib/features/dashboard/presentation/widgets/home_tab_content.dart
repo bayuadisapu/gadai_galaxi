@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:galaxi_gadai/core/constants/app_colors.dart';
-import 'package:galaxi_gadai/core/data/mock_data.dart';
+import 'package:galaxi_gadai/core/data/data_models.dart';
 import 'package:galaxi_gadai/features/pawn/presentation/pages/new_pawn_page.dart';
 import 'package:galaxi_gadai/features/pawn/presentation/pages/extension_page.dart';
 import 'package:galaxi_gadai/features/pawn/presentation/pages/redemption_page.dart';

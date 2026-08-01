@@ -30,6 +30,7 @@ class Customer {
   final String phone;
   final String address;
   final String cabangId;
+  final String ktpPhotoUrl;  // URL foto KTP nasabah
 
   Customer({
     required this.id,
@@ -41,6 +42,7 @@ class Customer {
     required this.phone,
     required this.address,
     this.cabangId = '',
+    this.ktpPhotoUrl = '',
   });
 }
 
@@ -61,7 +63,19 @@ class PawnTransaction {
   int totalRepayment;
   DateTime dateApplied;
   DateTime dateDue;
-  String status; // 'Aktif', 'Lunas', 'Macet'
+  String status; // 'Aktif', 'Lunas', 'Macet', 'Menunggu Verifikasi', 'Menunggu Pengambilan'
+
+  // ── Pembayaran Manual ──
+  String? paymentProofUrl;        // URL foto bukti transfer
+  DateTime? paymentRequestedAt;   // Waktu nasabah submit bukti
+  DateTime? paymentVerifiedAt;    // Waktu admin verifikasi
+  String? paymentVerifiedBy;      // Admin ID yang memverifikasi
+  String? paymentType;            // 'perpanjang' | 'tebus'
+  int? paymentPeriodDays;         // Periode yang dipilih (untuk perpanjang)
+  String? paymentRejectReason;    // Alasan ditolak (jika ada)
+
+  // ── Denormalized (diisi saat join/lookup) ──
+  String nasabahName;             // Nama nasabah (dari tabel gadai_nasabah_accounts)
 
   PawnTransaction({
     required this.id,
@@ -80,12 +94,23 @@ class PawnTransaction {
     required this.dateApplied,
     required this.dateDue,
     required this.status,
+    this.paymentProofUrl,
+    this.paymentRequestedAt,
+    this.paymentVerifiedAt,
+    this.paymentVerifiedBy,
+    this.paymentType,
+    this.paymentPeriodDays,
+    this.paymentRejectReason,
+    this.nasabahName = '',
   });
 
   /// Nomor transaksi yang ditampilkan ke user.
   /// Gunakan transactionCode jika ada, fallback ke 8 karakter pertama UUID.
   String get displayCode =>
       transactionCode.isNotEmpty ? transactionCode : 'GDI-${id.substring(0, 8).toUpperCase()}';
+
+  /// Apakah transaksi sedang menunggu verifikasi pembayaran
+  bool get isAwaitingVerification => status == 'Menunggu Verifikasi';
 
   void extendTenor(int additionalDays) {
     dateDue = dateDue.add(Duration(days: additionalDays));
@@ -113,5 +138,41 @@ class ExtensionHistory {
     required this.tglPerpanjangan,
     required this.tglTempoLama,
     required this.tglTempoBaru,
+  });
+}
+
+// ── Model: LelangHistory ──
+class LelangHistory {
+  final String id;
+  final String transactionId;
+  final int hargaLelang;
+  final DateTime tglLelang;
+
+  LelangHistory({
+    required this.id,
+    required this.transactionId,
+    required this.hargaLelang,
+    required this.tglLelang,
+  });
+}
+
+// ── Model: RekeningGadai ──
+class RekeningGadai {
+  final String id;
+  final String bankName;
+  final String accountNumber;
+  final String accountName;
+  final bool isActive;
+  final String? branchId;
+  final String qrisImageUrl; // URL gambar QRIS (kosong jika belum ada)
+
+  RekeningGadai({
+    required this.id,
+    required this.bankName,
+    required this.accountNumber,
+    required this.accountName,
+    this.isActive = true,
+    this.branchId,
+    this.qrisImageUrl = '',
   });
 }

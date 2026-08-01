@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:galaxi_gadai/core/constants/app_colors.dart';
-import 'package:galaxi_gadai/core/data/mock_data.dart';
+import 'package:galaxi_gadai/core/data/data_models.dart';
 import 'package:galaxi_gadai/core/services/supabase_gadai_service.dart';
 import '../widgets/customer_list_item.dart';
 import '../widgets/customer_details_sheet.dart';
@@ -9,7 +9,14 @@ import '../widgets/customer_details_sheet.dart';
 class CustomerSearchPage extends StatefulWidget {
   final bool isTab;
   final String branchId;
-  const CustomerSearchPage({super.key, this.isTab = false, this.branchId = 'pusat'});
+  final String? initialQuery;
+
+  const CustomerSearchPage({
+    super.key,
+    this.isTab = false,
+    this.branchId = 'pusat',
+    this.initialQuery,
+  });
 
   @override
   State<CustomerSearchPage> createState() => _CustomerSearchPageState();
@@ -27,6 +34,10 @@ class _CustomerSearchPageState extends State<CustomerSearchPage> {
   @override
   void initState() {
     super.initState();
+    if (widget.initialQuery != null && widget.initialQuery!.trim().isNotEmpty) {
+      _searchController.text = widget.initialQuery!.trim();
+      _searchQuery = widget.initialQuery!.trim();
+    }
     _loadData();
   }
 
@@ -50,20 +61,34 @@ class _CustomerSearchPageState extends State<CustomerSearchPage> {
   }
 
   List<Customer> _getFilteredCustomers() {
+    final query = _searchQuery.toLowerCase().trim();
+
     return _customers.where((customer) {
-      final nameMatch = customer.name.toLowerCase().contains(_searchQuery.toLowerCase());
-      final nikMatch = customer.nik.contains(_searchQuery);
-      final phoneMatch = customer.phone.contains(_searchQuery);
-      final matchesSearch = nameMatch || nikMatch || phoneMatch;
+      final txs = _txs.where((tx) => tx.customerId == customer.id).toList();
+
+      final nameMatch = customer.name.toLowerCase().contains(query);
+      final nikMatch = customer.nik.contains(query);
+      final phoneMatch = customer.phone.contains(query);
+      final contractMatch = txs.any((tx) =>
+          tx.displayCode.toLowerCase().contains(query) ||
+          tx.id.toLowerCase().contains(query) ||
+          tx.brand.toLowerCase().contains(query) ||
+          tx.model.toLowerCase().contains(query) ||
+          tx.collateralType.toLowerCase().contains(query));
+
+      final matchesSearch = query.isEmpty || nameMatch || nikMatch || phoneMatch || contractMatch;
 
       if (!matchesSearch) return false;
 
-      final txs = _txs.where((tx) => tx.customerId == customer.id).toList();
-
-      if (_activeFilter == 'Semua') return true;
-      else if (_activeFilter == 'Aktif') return txs.any((tx) => tx.status == 'Aktif');
-      else if (_activeFilter == 'Jatuh Tempo') return txs.any((tx) => tx.status == 'Aktif' && tx.dateDue.difference(DateTime.now()).inDays <= 7);
-      else if (_activeFilter == 'Macet') return txs.any((tx) => tx.status == 'Macet');
+      if (_activeFilter == 'Semua') {
+        return true;
+      } else if (_activeFilter == 'Aktif') {
+        return txs.any((tx) => tx.status == 'Aktif');
+      } else if (_activeFilter == 'Jatuh Tempo') {
+        return txs.any((tx) => tx.status == 'Aktif' && tx.dateDue.difference(DateTime.now()).inDays <= 7);
+      } else if (_activeFilter == 'Macet') {
+        return txs.any((tx) => tx.status == 'Macet');
+      }
       return true;
     }).toList();
   }

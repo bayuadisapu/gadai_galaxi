@@ -1,14 +1,22 @@
 import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:galaxi_gadai/core/constants/app_colors.dart';
-import 'package:galaxi_gadai/core/data/mock_data.dart';
+import 'package:galaxi_gadai/core/data/data_models.dart';
 import 'package:galaxi_gadai/core/services/supabase_gadai_service.dart';
+import 'package:galaxi_gadai/core/services/fcm_service.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:galaxi_gadai/features/auth/presentation/pages/role_portal_page.dart';
 import 'package:galaxi_gadai/features/pawn/presentation/pages/transaksi_detail_page.dart';
 import 'package:galaxi_gadai/features/pawn/presentation/pages/new_pawn_page.dart';
 import 'package:galaxi_gadai/core/config/system_config.dart';
+import 'package:galaxi_gadai/features/dashboard/presentation/widgets/laporan_tab_content.dart';
+import 'package:galaxi_gadai/features/admin_cabang/presentation/pages/lelang_page.dart';
+import 'package:galaxi_gadai/features/admin_cabang/presentation/pages/barang_terjual_page.dart';
+import 'package:galaxi_gadai/features/admin_cabang/presentation/pages/kas_page.dart';
 
 class SuperAdminDashboardPage extends StatefulWidget {
   const SuperAdminDashboardPage({super.key});
@@ -44,7 +52,12 @@ class _SuperAdminDashboardPageState extends State<SuperAdminDashboardPage> {
   // ── Tahap 5: Kas ──
   List<Map<String, dynamic>> _kasEntries = [];
   Map<String, int> _kasSaldo = {};
+  Map<String, int> _walletBalances = {}; // Saldo Rekening Gadai per cabang
   String _filterKasCabang = ''; // '' = semua cabang
+
+  // ── Rekening Pembayaran ──
+  List<RekeningGadai> _adminRekeningList = [];
+  String _filterRekeningCabang = 'all';
 
   late TextEditingController _tariffCtrl;
   late TextEditingController _unitAmountCtrl;
@@ -60,12 +73,22 @@ class _SuperAdminDashboardPageState extends State<SuperAdminDashboardPage> {
     _minTenorCtrl = TextEditingController(text: SystemConfig.minTenor.toString());
     _maxTenorCtrl = TextEditingController(text: SystemConfig.maxTenor.toString());
     _alertDaysCtrl = TextEditingController(text: SystemConfig.alertDays.toString());
+    _initFcm();
     _loadData().then((_) {
       if (_activityLogs.isNotEmpty) {
         _lastLogId = _activityLogs.first['id']?.toString();
       }
       _startLogPolling();
     });
+  }
+
+  Future<void> _initFcm() async {
+    await FcmService.instance.initialize();
+    await FcmService.instance.requestPermission();
+    final userId = Supabase.instance.client.auth.currentUser?.id;
+    if (userId != null) {
+      await FcmService.instance.saveStaffFcmToken(userId);
+    }
   }
 
   @override
@@ -154,10 +177,14 @@ class _SuperAdminDashboardPageState extends State<SuperAdminDashboardPage> {
         action: SnackBarAction(
           label: 'LIHAT',
           textColor: color,
-          onPressed: () => _showLogDetailDialog(context, log),
+          onPressed: () {
+            ScaffoldMessenger.of(context).hideCurrentSnackBar();
+            _showLogDetailDialog(context, log);
+          },
         ),
         behavior: SnackBarBehavior.floating,
-        duration: const Duration(seconds: 4),
+        duration: const Duration(seconds: 3),
+        dismissDirection: DismissDirection.horizontal,
         backgroundColor: const Color(0xFF1E293B),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
       ),
@@ -466,12 +493,19 @@ class _SuperAdminDashboardPageState extends State<SuperAdminDashboardPage> {
     try {
       final branches = await _svc.fetchBranches();
       final allTx = await _svc.fetchTransactions();
-      final allCustomers = await _svc.fetchNasabah();
       final allNasabah = await _svc.fetchNasabah();
       final staffUsers = await _svc.fetchStaffUsers();
       final activityLogs = await _svc.fetchActivityLogs(limit: 300);
       final kasEntries = await _svc.fetchKas();
       final kasSaldo = await _svc.fetchKasSaldo();
+      final adminRekening = await _svc.fetchAllRekeningGadaiAdmin();
+      // Fetch wallet (Saldo Rekening Gadai) per cabang secara paralel
+      final walletFutures = branches.map((b) => _svc.fetchWalletBalance(b.id));
+      final walletResults = await Future.wait(walletFutures);
+      final walletBalances = <String, int>{};
+      for (int i = 0; i < branches.length; i++) {
+        walletBalances[branches[i].id] = walletResults[i];
+      }
 
       // Load config dari Supabase dan update SystemConfig
       final config = await _svc.fetchSystemConfig();
@@ -490,12 +524,14 @@ class _SuperAdminDashboardPageState extends State<SuperAdminDashboardPage> {
       setState(() {
         _branches = branches;
         _allTx = allTx;
-        _allCustomers = allCustomers;
+        _allCustomers = allNasabah;
         _allNasabah = allNasabah;
         _staffUsers = staffUsers;
         _activityLogs = activityLogs;
         _kasEntries = kasEntries;
         _kasSaldo = kasSaldo;
+        _walletBalances = walletBalances;
+        _adminRekeningList = adminRekening;
         // Sync controllers dengan nilai terbaru dari Supabase
         _tariffCtrl.text = SystemConfig.tariffPerUnit.toString();
         _unitAmountCtrl.text = SystemConfig.unitAmount.toString();
@@ -508,6 +544,21 @@ class _SuperAdminDashboardPageState extends State<SuperAdminDashboardPage> {
       if (!mounted) return;
       setState(() => _isLoading = false);
     }
+  }
+
+  /// Refresh hanya saldo wallet tanpa mengubah loading state / navigasi
+  Future<void> _refreshWalletBalances() async {
+    if (_branches.isEmpty) return;
+    try {
+      final walletFutures = _branches.map((b) => _svc.fetchWalletBalance(b.id));
+      final walletResults = await Future.wait(walletFutures);
+      if (!mounted) return;
+      final newBalances = <String, int>{};
+      for (int i = 0; i < _branches.length; i++) {
+        newBalances[_branches[i].id] = walletResults[i];
+      }
+      setState(() => _walletBalances = newBalances);
+    } catch (_) {}
   }
 
   String _formatCurrency(int val) {
@@ -538,6 +589,62 @@ class _SuperAdminDashboardPageState extends State<SuperAdminDashboardPage> {
             },
             child: const Text('Keluar', style: TextStyle(color: Colors.red)),
           ),
+        ],
+      ),
+    );
+  }
+
+  // ── NAVIGATE TO BRANCH PAGE (LELANG / TERJUAL) ──
+  void _navigateToBranchPage(String type) {
+    if (_branches.isEmpty) return;
+
+    if (_branches.length == 1) {
+      final b = _branches.first;
+      if (type == 'lelang') {
+        Navigator.push(context, MaterialPageRoute(builder: (_) => LelangPage(branchId: b.id)));
+      } else {
+        Navigator.push(context, MaterialPageRoute(builder: (_) => BarangTerjualPage(branchId: b.id)));
+      }
+      return;
+    }
+
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Row(children: [
+          Icon(type == 'lelang' ? Icons.gavel_rounded : Icons.trending_up_rounded,
+              color: AppColors.royalBlue, size: 22),
+          const SizedBox(width: 8),
+          Text(type == 'lelang' ? 'Pilih Cabang - Lelang' : 'Pilih Cabang - Barang Terjual',
+              style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold)),
+        ]),
+        content: SizedBox(
+          width: double.maxFinite,
+          child: ListView.separated(
+            shrinkWrap: true,
+            itemCount: _branches.length,
+            separatorBuilder: (_, __) => const Divider(height: 1),
+            itemBuilder: (_, i) {
+              final b = _branches[i];
+              return ListTile(
+                title: Text(b.nama, style: const TextStyle(fontWeight: FontWeight.w600)),
+                subtitle: Text(b.id),
+                trailing: const Icon(Icons.arrow_forward_ios_rounded, size: 14),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  if (type == 'lelang') {
+                    Navigator.push(context, MaterialPageRoute(builder: (_) => LelangPage(branchId: b.id)));
+                  } else {
+                    Navigator.push(context, MaterialPageRoute(builder: (_) => BarangTerjualPage(branchId: b.id)));
+                  }
+                },
+              );
+            },
+          ),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Batal')),
         ],
       ),
     );
@@ -1065,11 +1172,24 @@ class _SuperAdminDashboardPageState extends State<SuperAdminDashboardPage> {
         case 4: body = _buildKas(); break;
         case 5: body = _buildKonfigurasi(); break;
         case 6: body = _buildActivityLog(); break;
+        case 7: body = const LaporanTabContent(branchId: 'all'); break;
         default: body = _buildOverview();
       }
     }
 
-    return Scaffold(
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, result) {
+        if (didPop) return;
+        if (_selectedCabangId != null) {
+          setState(() => _selectedCabangId = null);
+        } else if (_currentIndex != 0) {
+          setState(() => _currentIndex = 0);
+        } else {
+          SystemNavigator.pop();
+        }
+      },
+      child: Scaffold(
       backgroundColor: AppColors.surface,
       body: Column(
         children: [
@@ -1156,6 +1276,7 @@ class _SuperAdminDashboardPageState extends State<SuperAdminDashboardPage> {
           Expanded(child: body),
         ],
       ),
+    ),
     );
   }
 
@@ -1259,6 +1380,9 @@ class _SuperAdminDashboardPageState extends State<SuperAdminDashboardPage> {
               _buildGridItem('Nasabah', Icons.people_rounded, () {
                 setState(() => _currentIndex = 3);
               }),
+              _buildGridItem('Laporan', Icons.assessment_rounded, () {
+                setState(() => _currentIndex = 7);
+              }),
               _buildGridItem('Uang Kas', Icons.account_balance_wallet_rounded, () {
                 setState(() => _currentIndex = 4);
               }),
@@ -1267,6 +1391,12 @@ class _SuperAdminDashboardPageState extends State<SuperAdminDashboardPage> {
               }),
               _buildGridItem('Log', Icons.history_rounded, () {
                 setState(() => _currentIndex = 6);
+              }),
+              _buildGridItem('Lelang', Icons.gavel_rounded, () {
+                _navigateToBranchPage('lelang');
+              }),
+              _buildGridItem('Terjual', Icons.trending_up_rounded, () {
+                _navigateToBranchPage('terjual');
               }),
             ],
           ),
@@ -1370,7 +1500,6 @@ class _SuperAdminDashboardPageState extends State<SuperAdminDashboardPage> {
             final cTxs = _allTx.where((t) => t.cabangId == c.id).toList();
             final cAktif = cTxs.where((t) => t.status == 'Aktif').length;
             final cMacet = cTxs.where((t) => t.status == 'Macet').length;
-            final cPendapatan = cTxs.where((t) => t.status == 'Aktif').fold(0, (s, t) => s + t.dailyFee) * 30;
             return GestureDetector(
               onTap: () => setState(() { _currentIndex = 1; _selectedCabangId = c.id; }),
               child: Container(
@@ -1407,10 +1536,14 @@ class _SuperAdminDashboardPageState extends State<SuperAdminDashboardPage> {
                       const SizedBox(width: 6),
                       if (cMacet > 0) _statusBadge('$cMacet macet', AppColors.coral),
                     ]),
+                    const SizedBox(height: 4),
+                    Row(children: [
+                      const Icon(Icons.account_balance_wallet_rounded, size: 11, color: Color(0xFF2563EB)),
+                      const SizedBox(width: 3),
+                      Text('Saldo Kas: Rp ${_formatCurrency(_walletBalances[c.id] ?? 0)}',
+                        style: GoogleFonts.inter(color: const Color(0xFF2563EB), fontSize: 10, fontWeight: FontWeight.w600)),
+                    ]),
                   ])),
-                  Text('Rp ${_formatCurrency(cPendapatan)}',
-                    style: GoogleFonts.inter(color: AppColors.textDark, fontSize: 12, fontWeight: FontWeight.w600)),
-                  const SizedBox(width: 4),
                   const Icon(Icons.chevron_right_rounded, color: AppColors.textMuted, size: 18),
                 ]),
               ),
@@ -1678,7 +1811,6 @@ class _SuperAdminDashboardPageState extends State<SuperAdminDashboardPage> {
   Widget _buildCabangDetail(String cabangId) {
     final cabang = _branches.firstWhere((c) => c.id == cabangId, orElse: () => Cabang(id: cabangId, nama: cabangId, kode: cabangId, admin: ''));
     var cTxs = _allTx.where((t) => t.cabangId == cabangId).toList();
-    final cCustomers = _allCustomers.where((c) => c.cabangId == cabangId).toList();
 
     // Filter by status
     final filteredTxs = cTxs.where((tx) {
@@ -1737,13 +1869,17 @@ class _SuperAdminDashboardPageState extends State<SuperAdminDashboardPage> {
             SingleChildScrollView(
               scrollDirection: Axis.horizontal,
               child: Row(
-                children: ['Semua', 'Aktif', 'Macet', 'Lunas'].map((s) {
+                children: ['Semua', 'Aktif', 'Menunggu Pengambilan', 'Sudah Diambil', 'Lunas', 'Macet', 'Lelang', 'Terjual'].map((s) {
                   final active = _filterTxStatus == s;
                   Color chipColor;
                   switch (s) {
                     case 'Aktif': chipColor = AppColors.royalBlue; break;
-                    case 'Macet': chipColor = AppColors.coral; break;
+                    case 'Menunggu Pengambilan': chipColor = const Color(0xFF059669); break;
+                    case 'Sudah Diambil': chipColor = const Color(0xFF0D9488); break;
                     case 'Lunas': chipColor = AppColors.emerald; break;
+                    case 'Macet': chipColor = AppColors.coral; break;
+                    case 'Lelang': chipColor = const Color(0xFF8B5CF6); break;
+                    case 'Terjual': chipColor = const Color(0xFFD97706); break;
                     default: chipColor = AppColors.textMuted;
                   }
                   return GestureDetector(
@@ -1764,6 +1900,36 @@ class _SuperAdminDashboardPageState extends State<SuperAdminDashboardPage> {
                 }).toList(),
               ),
             ),
+            const SizedBox(height: 8),
+            // ── Saldo Mini Stats ──
+            Row(children: [
+              Expanded(
+                child: GestureDetector(
+                  onTap: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => KasPage(branchId: cabangId, namaCabang: cabang.nama)),
+                  ).then((_) => _refreshWalletBalances()),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFEFF6FF),
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: const Color(0xFFBFDBFE)),
+                    ),
+                    child: Row(children: [
+                      const Icon(Icons.account_balance_wallet_rounded, color: Color(0xFF2563EB), size: 14),
+                      const SizedBox(width: 6),
+                      Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                        Text('Saldo Kas', style: GoogleFonts.inter(color: const Color(0xFF2563EB), fontSize: 9, fontWeight: FontWeight.w600)),
+                        Text('Rp ${_formatCurrency(_walletBalances[cabangId] ?? 0)}',
+                          style: GoogleFonts.inter(color: const Color(0xFF1E40AF), fontSize: 11, fontWeight: FontWeight.w800)),
+                      ])),
+                      const Icon(Icons.chevron_right_rounded, color: Color(0xFF2563EB), size: 12),
+                    ]),
+                  ),
+                ),
+              ),
+            ]),
             const SizedBox(height: 10),
           ]),
         ),
@@ -1787,6 +1953,7 @@ class _SuperAdminDashboardPageState extends State<SuperAdminDashboardPage> {
                   Color statusColor = AppColors.primary;
                   if (tx.status == 'Macet') { statusColor = AppColors.coral; }
                   else if (tx.status == 'Lunas') { statusColor = AppColors.emerald; }
+                  else if (tx.status == 'Lelang' || tx.status == 'Terjual') { statusColor = const Color(0xFF8B5CF6); }
                   return GestureDetector(
                     onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => TransaksiDetailPage(transaction: tx))).then((_) => _loadData()),
                     child: Container(
@@ -2443,6 +2610,48 @@ class _SuperAdminDashboardPageState extends State<SuperAdminDashboardPage> {
             ],
           ),
         ),
+        // ── Saldo Rekening Gadai Card ──
+        Builder(builder: (_) {
+          final filteredWallet = _filterKasCabang.isEmpty
+              ? _walletBalances
+              : {_filterKasCabang: _walletBalances[_filterKasCabang] ?? 0};
+          final totalWallet = filteredWallet.values.fold(0, (s, v) => s + v);
+          return Container(
+            margin: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: const Color(0xFFE2E8F0)),
+              boxShadow: [BoxShadow(color: const Color(0xFF0A1628).withValues(alpha: 0.04), blurRadius: 8, offset: const Offset(0, 4))],
+            ),
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Row(children: [
+                const Icon(Icons.account_balance_rounded, color: Color(0xFF2563EB), size: 18),
+                const SizedBox(width: 8),
+                Text('Saldo Rekening Gadai', style: GoogleFonts.inter(color: AppColors.textMuted, fontSize: 13, fontWeight: FontWeight.w600)),
+                const Spacer(),
+                Text('Rp ${_formatCurrency(totalWallet)}',
+                  style: GoogleFonts.inter(color: AppColors.textDark, fontSize: 15, fontWeight: FontWeight.w800)),
+              ]),
+              if (_filterKasCabang.isEmpty && _branches.length > 1) ...[
+                const Divider(height: 16),
+                ...filteredWallet.entries.map((e) {
+                  final cabNama = _branches.firstWhere((b) => b.id == e.key,
+                    orElse: () => Cabang(id: '', nama: e.key, kode: '', admin: '')).nama;
+                  return Padding(
+                    padding: const EdgeInsets.only(bottom: 4),
+                    child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+                      Text(cabNama, style: GoogleFonts.inter(color: AppColors.textMuted, fontSize: 12)),
+                      Text('Rp ${_formatCurrency(e.value)}',
+                        style: GoogleFonts.inter(color: AppColors.textDark, fontSize: 12, fontWeight: FontWeight.w600)),
+                    ]),
+                  );
+                }),
+              ],
+            ]),
+          );
+        }),
         // List entri
         Expanded(
           child: RefreshIndicator(
@@ -2846,6 +3055,8 @@ class _SuperAdminDashboardPageState extends State<SuperAdminDashboardPage> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          _buildRekeningSection(),
+          const SizedBox(height: 24),
           const Text('⚙️ Konfigurasi Tarif & Aturan Gadai', style: TextStyle(color: AppColors.textDark, fontSize: 16, fontWeight: FontWeight.bold)),
           const SizedBox(height: 16),
           Container(
@@ -2934,6 +3145,1334 @@ class _SuperAdminDashboardPageState extends State<SuperAdminDashboardPage> {
         ],
       ),
     );
+  }
+
+  LinearGradient _getBankGradient(String bankName) {
+    final upper = bankName.toUpperCase().trim();
+    if (upper.contains('BCA')) {
+      return const LinearGradient(
+        colors: [Color(0xFF0F4C81), Color(0xFF1E3A8A)],
+        begin: Alignment.topLeft,
+        end: Alignment.bottomRight,
+      );
+    } else if (upper.contains('BRI')) {
+      return const LinearGradient(
+        colors: [Color(0xFF00529C), Color(0xFF0284C7)],
+        begin: Alignment.topLeft,
+        end: Alignment.bottomRight,
+      );
+    } else if (upper.contains('MANDIRI')) {
+      return const LinearGradient(
+        colors: [Color(0xFF0F172A), Color(0xFF1E293B)],
+        begin: Alignment.topLeft,
+        end: Alignment.bottomRight,
+      );
+    } else if (upper.contains('BNI')) {
+      return const LinearGradient(
+        colors: [Color(0xFFEA580C), Color(0xFFC2410C)],
+        begin: Alignment.topLeft,
+        end: Alignment.bottomRight,
+      );
+    } else if (upper.contains('PERMATA') || upper.contains('DANAMON')) {
+      return const LinearGradient(
+        colors: [Color(0xFF0D9488), Color(0xFF0F766E)],
+        begin: Alignment.topLeft,
+        end: Alignment.bottomRight,
+      );
+    } else if (upper.contains('CIMB')) {
+      return const LinearGradient(
+        colors: [Color(0xFFB91C1C), Color(0xFF991B1B)],
+        begin: Alignment.topLeft,
+        end: Alignment.bottomRight,
+      );
+    }
+    return const LinearGradient(
+      colors: [Color(0xFF4F46E5), Color(0xFF2563EB)],
+      begin: Alignment.topLeft,
+      end: Alignment.bottomRight,
+    );
+  }
+
+  String _formatBankAccNumber(String raw) {
+    final clean = raw.replaceAll(RegExp(r'\s+'), '');
+    if (clean.length <= 4) return clean;
+    final buffer = StringBuffer();
+    for (int i = 0; i < clean.length; i++) {
+      if (i > 0 && i % 4 == 0) buffer.write(' ');
+      buffer.write(clean[i]);
+    }
+    return buffer.toString();
+  }
+
+  Widget _buildRekeningSection() {
+    final filtered = _filterRekeningCabang == 'all'
+        ? _adminRekeningList
+        : _adminRekeningList.where((r) => r.branchId == _filterRekeningCabang || (_filterRekeningCabang.isEmpty && r.branchId == null)).toList();
+
+    final activeCount = filtered.where((r) => r.isActive).length;
+
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.03),
+            blurRadius: 16,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // ── Header Bar ──
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(
+                    colors: [AppColors.royalBlue, Color(0xFF2563EB)],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  ),
+                  borderRadius: BorderRadius.circular(12),
+                  boxShadow: [
+                    BoxShadow(
+                      color: AppColors.royalBlue.withValues(alpha: 0.25),
+                      blurRadius: 8,
+                      offset: const Offset(0, 3),
+                    ),
+                  ],
+                ),
+                child: const Icon(Icons.account_balance_rounded, color: Colors.white, size: 22),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Wrap(
+                      crossAxisAlignment: WrapCrossAlignment.center,
+                      spacing: 8,
+                      runSpacing: 4,
+                      children: [
+                        const Text(
+                          'Rekening Pembayaran',
+                          style: TextStyle(
+                            color: AppColors.textDark,
+                            fontSize: 16,
+                            fontWeight: FontWeight.w800,
+                            letterSpacing: -0.3,
+                          ),
+                        ),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFF0FDF4),
+                            borderRadius: BorderRadius.circular(20),
+                            border: Border.all(color: const Color(0xFFBBF7D0)),
+                          ),
+                          child: Text(
+                            '$activeCount Aktif',
+                            style: const TextStyle(
+                              color: Color(0xFF15803D),
+                              fontSize: 11,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 4),
+                    const Text(
+                      'Kelola nomor rekening bank & QRIS transfer per cabang untuk penerimaan pembayaran nasabah.',
+                      style: TextStyle(color: AppColors.textMuted, fontSize: 12, height: 1.3),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+
+          // ── Action & Filter Row ──
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final isNarrow = constraints.maxWidth < 500;
+              final buttonWidget = ElevatedButton.icon(
+                onPressed: () => _showRekeningDialog(),
+                icon: const Icon(Icons.add_circle_rounded, size: 18, color: Colors.white),
+                label: const Text(
+                  'Tambah Rekening',
+                  style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold),
+                ),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.royalBlue,
+                  elevation: 2,
+                  shadowColor: AppColors.royalBlue.withValues(alpha: 0.3),
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                ),
+              );
+
+              final filterWidget = Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF8FAFC),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: const Color(0xFFE2E8F0)),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(Icons.storefront_rounded, size: 16, color: AppColors.royalBlue),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: DropdownButtonHideUnderline(
+                        child: DropdownButton<String>(
+                          value: _filterRekeningCabang,
+                          isExpanded: true,
+                          icon: const Icon(Icons.keyboard_arrow_down_rounded, color: AppColors.textMuted, size: 18),
+                          style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.textDark),
+                          items: [
+                            const DropdownMenuItem(value: 'all', child: Text('🌐 Semua Cabang & Umum')),
+                            ..._branches.map((b) => DropdownMenuItem(value: b.id, child: Text('🏢 ${b.nama}'))),
+                          ],
+                          onChanged: (val) {
+                            if (val != null) setState(() => _filterRekeningCabang = val);
+                          },
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              );
+
+              if (isNarrow) {
+                return Column(
+                  children: [
+                    SizedBox(width: double.infinity, child: buttonWidget),
+                    const SizedBox(height: 10),
+                    filterWidget,
+                  ],
+                );
+              }
+
+              return Row(
+                children: [
+                  Expanded(child: filterWidget),
+                  const SizedBox(width: 12),
+                  buttonWidget,
+                ],
+              );
+            },
+          ),
+          const SizedBox(height: 20),
+
+          // Lista Card Rekening
+          if (filtered.isEmpty)
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(vertical: 36, horizontal: 20),
+              decoration: BoxDecoration(
+                color: const Color(0xFFF8FAFC),
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: const Color(0xFFE2E8F0), style: BorderStyle.solid),
+              ),
+              child: const Column(
+                children: [
+                  Icon(Icons.account_balance_wallet_outlined, color: AppColors.textMuted, size: 44),
+                  SizedBox(height: 10),
+                  Text(
+                    'Belum Ada Rekening Tersimpan',
+                    style: TextStyle(color: AppColors.textDark, fontSize: 13, fontWeight: FontWeight.w700),
+                  ),
+                  SizedBox(height: 4),
+                  Text(
+                    'Klik tombol "+ Tambah Rekening" untuk mendaftarkan rekening bank atau QRIS baru',
+                    style: TextStyle(color: AppColors.textMuted, fontSize: 11),
+                    textAlign: TextAlign.center,
+                  ),
+                ],
+              ),
+            )
+          else
+            ListView.separated(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              itemCount: filtered.length,
+              separatorBuilder: (_, __) => const SizedBox(height: 14),
+              itemBuilder: (ctx, i) {
+                final rek = filtered[i];
+                final cabang = _branches.firstWhere(
+                  (b) => b.id == rek.branchId,
+                  orElse: () => Cabang(id: 'all', nama: 'Semua Cabang (Umum)', kode: 'all', admin: ''),
+                );
+                final cabangName = rek.branchId == null || rek.branchId!.isEmpty ? 'Semua Cabang (Umum)' : cabang.nama;
+                final isGeneral = rek.branchId == null || rek.branchId!.isEmpty || rek.branchId == 'all';
+
+                return Container(
+                  clipBehavior: Clip.antiAlias,
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(
+                      color: rek.isActive ? AppColors.royalBlue.withValues(alpha: 0.25) : const Color(0xFFE2E8F0),
+                      width: 1.2,
+                    ),
+                    boxShadow: [
+                      BoxShadow(
+                        color: rek.isActive
+                            ? AppColors.royalBlue.withValues(alpha: 0.05)
+                            : Colors.black.withValues(alpha: 0.02),
+                        blurRadius: 10,
+                        offset: const Offset(0, 3),
+                      ),
+                    ],
+                  ),
+                  child: IntrinsicHeight(
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        // Left Accent Status Bar
+                        Container(
+                          width: 5,
+                          color: rek.isActive ? AppColors.emerald : const Color(0xFF94A3B8),
+                        ),
+                        Expanded(
+                          child: Padding(
+                            padding: const EdgeInsets.all(14),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                // Top Row: Badges & Status Switch
+                                Wrap(
+                                  crossAxisAlignment: WrapCrossAlignment.center,
+                                  alignment: WrapAlignment.spaceBetween,
+                                  spacing: 8,
+                                  runSpacing: 8,
+                                  children: [
+                                    Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Container(
+                                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                          decoration: BoxDecoration(
+                                            gradient: _getBankGradient(rek.bankName),
+                                            borderRadius: BorderRadius.circular(8),
+                                            boxShadow: [
+                                              BoxShadow(
+                                                color: Colors.black.withValues(alpha: 0.12),
+                                                blurRadius: 4,
+                                                offset: const Offset(0, 2),
+                                              ),
+                                            ],
+                                          ),
+                                          child: Text(
+                                            rek.bankName.toUpperCase(),
+                                            style: const TextStyle(
+                                              color: Colors.white,
+                                              fontSize: 11,
+                                              fontWeight: FontWeight.w900,
+                                              letterSpacing: 0.8,
+                                            ),
+                                          ),
+                                        ),
+                                        const SizedBox(width: 8),
+                                        Flexible(
+                                          child: Container(
+                                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                            decoration: BoxDecoration(
+                                              color: isGeneral ? const Color(0xFFEFF6FF) : const Color(0xFFF0FDF4),
+                                              borderRadius: BorderRadius.circular(8),
+                                              border: Border.all(
+                                                color: isGeneral ? const Color(0xFFBFDBFE) : const Color(0xFFBBF7D0),
+                                              ),
+                                            ),
+                                            child: Row(
+                                              mainAxisSize: MainAxisSize.min,
+                                              children: [
+                                                Icon(
+                                                  isGeneral ? Icons.language_rounded : Icons.storefront_rounded,
+                                                  size: 11,
+                                                  color: isGeneral ? const Color(0xFF1D4ED8) : const Color(0xFF15803D),
+                                                ),
+                                                const SizedBox(width: 4),
+                                                Flexible(
+                                                  child: Text(
+                                                    cabangName,
+                                                    maxLines: 1,
+                                                    overflow: TextOverflow.ellipsis,
+                                                    style: TextStyle(
+                                                      fontSize: 10,
+                                                      fontWeight: FontWeight.w700,
+                                                      color: isGeneral ? const Color(0xFF1D4ED8) : const Color(0xFF15803D),
+                                                    ),
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+
+                                    // Status Switch Toggle
+                                    InkWell(
+                                      onTap: () async {
+                                        await _svc.updateRekeningGadai(
+                                          id: rek.id,
+                                          bankName: rek.bankName,
+                                          accountNumber: rek.accountNumber,
+                                          accountName: rek.accountName,
+                                          isActive: !rek.isActive,
+                                          branchId: rek.branchId,
+                                        );
+                                        await _loadData();
+                                      },
+                                      borderRadius: BorderRadius.circular(20),
+                                      child: AnimatedContainer(
+                                        duration: const Duration(milliseconds: 200),
+                                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                        decoration: BoxDecoration(
+                                          color: rek.isActive
+                                              ? AppColors.emerald.withValues(alpha: 0.1)
+                                              : const Color(0xFFF1F5F9),
+                                          borderRadius: BorderRadius.circular(20),
+                                          border: Border.all(
+                                            color: rek.isActive
+                                                ? AppColors.emerald.withValues(alpha: 0.4)
+                                                : const Color(0xFFCBD5E1),
+                                          ),
+                                        ),
+                                        child: Row(
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            Container(
+                                              width: 7,
+                                              height: 7,
+                                              decoration: BoxDecoration(
+                                                color: rek.isActive ? AppColors.emerald : const Color(0xFF64748B),
+                                                shape: BoxShape.circle,
+                                              ),
+                                            ),
+                                            const SizedBox(width: 6),
+                                            Text(
+                                              rek.isActive ? 'Aktif' : 'Nonaktif',
+                                              style: TextStyle(
+                                                fontSize: 11,
+                                                fontWeight: FontWeight.w700,
+                                                color: rek.isActive ? AppColors.emerald : const Color(0xFF64748B),
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 12),
+
+                                // Account Number & QRIS Preview Row
+                                Row(
+                                  children: [
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          Row(
+                                            children: [
+                                              Flexible(
+                                                child: SelectableText(
+                                                  _formatBankAccNumber(rek.accountNumber),
+                                                  style: TextStyle(
+                                                    color: rek.isActive ? AppColors.textDark : AppColors.textMuted,
+                                                    fontSize: 16,
+                                                    fontWeight: FontWeight.w800,
+                                                    letterSpacing: 0.5,
+                                                    fontFamily: GoogleFonts.spaceGrotesk().fontFamily,
+                                                  ),
+                                                ),
+                                              ),
+                                              const SizedBox(width: 6),
+                                              InkWell(
+                                                onTap: () {
+                                                  Clipboard.setData(ClipboardData(text: rek.accountNumber));
+                                                  ScaffoldMessenger.of(context).showSnackBar(
+                                                    const SnackBar(
+                                                      content: Text('Nomor rekening berhasil disalin!'),
+                                                      backgroundColor: AppColors.emerald,
+                                                      duration: Duration(seconds: 2),
+                                                      behavior: SnackBarBehavior.floating,
+                                                    ),
+                                                  );
+                                                },
+                                                child: Padding(
+                                                  padding: const EdgeInsets.all(4),
+                                                  child: Icon(
+                                                    Icons.copy_rounded,
+                                                    size: 14,
+                                                    color: AppColors.royalBlue.withValues(alpha: 0.8),
+                                                  ),
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                          const SizedBox(height: 4),
+                                          Row(
+                                            children: [
+                                              const Icon(Icons.person_rounded, size: 13, color: AppColors.textMuted),
+                                              const SizedBox(width: 4),
+                                              Expanded(
+                                                child: Text(
+                                                  'a.n. ${rek.accountName}',
+                                                  maxLines: 1,
+                                                  overflow: TextOverflow.ellipsis,
+                                                  style: const TextStyle(
+                                                    fontSize: 12,
+                                                    fontWeight: FontWeight.w600,
+                                                    color: AppColors.textMuted,
+                                                  ),
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                    if (rek.qrisImageUrl.isNotEmpty) ...[
+                                      const SizedBox(width: 10),
+                                      GestureDetector(
+                                        onTap: () {
+                                          showDialog(
+                                            context: context,
+                                            builder: (_) => Dialog(
+                                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                                              child: ClipRRect(
+                                                borderRadius: BorderRadius.circular(16),
+                                                child: Image.network(rek.qrisImageUrl, fit: BoxFit.contain),
+                                              ),
+                                            ),
+                                          );
+                                        },
+                                        child: Container(
+                                          width: 44,
+                                          height: 44,
+                                          decoration: BoxDecoration(
+                                            borderRadius: BorderRadius.circular(8),
+                                            border: Border.all(color: const Color(0xFFCBD5E1)),
+                                          ),
+                                          child: ClipRRect(
+                                            borderRadius: BorderRadius.circular(7),
+                                            child: Image.network(
+                                              rek.qrisImageUrl,
+                                              fit: BoxFit.cover,
+                                              errorBuilder: (_, __, ___) => const Icon(Icons.qr_code, size: 20),
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ],
+                                ),
+                                const SizedBox(height: 12),
+
+                                // Bottom Row: Action Buttons
+                                Row(
+                                  mainAxisAlignment: MainAxisAlignment.end,
+                                  children: [
+                                    InkWell(
+                                      onTap: () => _showRekeningDialog(rekening: rek),
+                                      borderRadius: BorderRadius.circular(8),
+                                      child: Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                                        decoration: BoxDecoration(
+                                          color: const Color(0xFFEFF6FF),
+                                          borderRadius: BorderRadius.circular(8),
+                                          border: Border.all(color: const Color(0xFFBFDBFE)),
+                                        ),
+                                        child: const Row(
+                                          children: [
+                                            Icon(Icons.edit_rounded, size: 14, color: AppColors.royalBlue),
+                                            SizedBox(width: 4),
+                                            Text(
+                                              'Edit',
+                                              style: TextStyle(
+                                                fontSize: 11,
+                                                fontWeight: FontWeight.w700,
+                                                color: AppColors.royalBlue,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    ),
+                                    const SizedBox(width: 8),
+                                    InkWell(
+                                      onTap: () => _confirmDeleteRekening(rek.id),
+                                      borderRadius: BorderRadius.circular(8),
+                                      child: Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                                        decoration: BoxDecoration(
+                                          color: const Color(0xFFFEF2F2),
+                                          borderRadius: BorderRadius.circular(8),
+                                          border: Border.all(color: const Color(0xFFFCA5A5)),
+                                        ),
+                                        child: const Row(
+                                          children: [
+                                            Icon(Icons.delete_outline_rounded, size: 14, color: AppColors.coral),
+                                            SizedBox(width: 4),
+                                            Text(
+                                              'Hapus',
+                                              style: TextStyle(
+                                                fontSize: 11,
+                                                fontWeight: FontWeight.w700,
+                                                color: AppColors.coral,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+              },
+            ),
+        ],
+      ),
+    );
+  }
+
+  void _showRekeningDialog({RekeningGadai? rekening}) {
+    final isEdit = rekening != null;
+    final isQrisOnlyInitial = isEdit && (rekening.bankName.toUpperCase() == 'QRIS');
+    
+    String mode = isQrisOnlyInitial ? 'qris' : 'bank'; // 'bank' | 'qris'
+    final bankCtrl = TextEditingController(text: isEdit ? rekening.bankName : '');
+    final numberCtrl = TextEditingController(text: isEdit ? rekening.accountNumber : '');
+    final nameCtrl = TextEditingController(text: isEdit ? rekening.accountName : '');
+    String selectedBranch = isEdit ? (rekening.branchId ?? 'all') : 'all';
+    bool isActive = isEdit ? rekening.isActive : true;
+    XFile? qrisXFile;
+    String qrisPreviewUrl = isEdit ? rekening.qrisImageUrl : '';
+
+    final quickBanks = ['BCA', 'BRI', 'Mandiri', 'BNI', 'CIMB', 'Permata'];
+
+    showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setS) {
+          final isMobile = MediaQuery.of(ctx).size.width < 600;
+          return Dialog(
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+            clipBehavior: Clip.antiAlias,
+            elevation: 12,
+            child: Container(
+              width: isMobile ? double.infinity : 480,
+              decoration: const BoxDecoration(
+                color: Colors.white,
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Dialog Header Banner
+                  Container(
+                    padding: const EdgeInsets.all(20),
+                    decoration: const BoxDecoration(
+                      gradient: LinearGradient(
+                        colors: [Color(0xFF0F172A), Color(0xFF1E293B)],
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                      ),
+                    ),
+                    child: Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(10),
+                          decoration: BoxDecoration(
+                            color: Colors.white.withValues(alpha: 0.1),
+                            shape: BoxShape.circle,
+                          ),
+                          child: Icon(
+                            mode == 'qris' ? Icons.qr_code_rounded : Icons.account_balance_rounded,
+                            color: Colors.white,
+                            size: 22,
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                isEdit
+                                    ? (mode == 'qris' ? 'Edit Gambar QRIS' : 'Edit Rekening Bank')
+                                    : (mode == 'qris' ? 'Tambah QRIS Baru' : 'Tambah Rekening Bank Baru'),
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                mode == 'qris'
+                                    ? 'Upload barcode QRIS untuk pembayaran nasabah'
+                                    : 'Rekening ini akan ditampilkan ke nasabah saat transfer pembayaran',
+                                style: const TextStyle(color: Colors.white70, fontSize: 11),
+                              ),
+                            ],
+                          ),
+                        ),
+                        IconButton(
+                          onPressed: () => Navigator.pop(ctx),
+                          icon: const Icon(Icons.close_rounded, color: Colors.white70, size: 20),
+                          padding: EdgeInsets.zero,
+                          constraints: const BoxConstraints(),
+                        ),
+                      ],
+                    ),
+                  ),
+
+                  // Mode Selector Tabs (hanya tampil jika tambah baru)
+                  if (!isEdit)
+                    Container(
+                      color: const Color(0xFFF1F5F9),
+                      padding: const EdgeInsets.all(6),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: GestureDetector(
+                              onTap: () => setS(() => mode = 'bank'),
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(vertical: 10),
+                                decoration: BoxDecoration(
+                                  color: mode == 'bank' ? Colors.white : Colors.transparent,
+                                  borderRadius: BorderRadius.circular(10),
+                                  boxShadow: mode == 'bank'
+                                      ? [BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 4)]
+                                      : null,
+                                ),
+                                child: Row(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    Icon(Icons.account_balance_rounded,
+                                        size: 16,
+                                        color: mode == 'bank' ? AppColors.royalBlue : AppColors.textMuted),
+                                    const SizedBox(width: 6),
+                                    Text(
+                                      'Rekening Bank',
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.bold,
+                                        color: mode == 'bank' ? AppColors.royalBlue : AppColors.textMuted,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ),
+                          Expanded(
+                            child: GestureDetector(
+                              onTap: () => setS(() => mode = 'qris'),
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(vertical: 10),
+                                decoration: BoxDecoration(
+                                  color: mode == 'qris' ? Colors.white : Colors.transparent,
+                                  borderRadius: BorderRadius.circular(10),
+                                  boxShadow: mode == 'qris'
+                                      ? [BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 4)]
+                                      : null,
+                                ),
+                                child: Row(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    Icon(Icons.qr_code_rounded,
+                                        size: 16,
+                                        color: mode == 'qris' ? const Color(0xFFF59E0B) : AppColors.textMuted),
+                                    const SizedBox(width: 6),
+                                    Text(
+                                      'Hanya Foto QRIS',
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.bold,
+                                        color: mode == 'qris' ? const Color(0xFFF59E0B) : AppColors.textMuted,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+
+                  // Dialog Form Content
+                  Flexible(
+                    child: SingleChildScrollView(
+                      padding: const EdgeInsets.all(20),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          // Cabang Tujuan Dropdown
+                          const Text(
+                            'Cabang Tujuan',
+                            style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: AppColors.textDark),
+                          ),
+                          const SizedBox(height: 6),
+                          DropdownButtonFormField<String>(
+                            value: selectedBranch,
+                            decoration: InputDecoration(
+                              prefixIcon: const Icon(Icons.storefront_rounded, size: 18, color: AppColors.royalBlue),
+                              filled: true,
+                              fillColor: const Color(0xFFF8FAFC),
+                              contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(12),
+                                borderSide: const BorderSide(color: Color(0xFFCBD5E1)),
+                              ),
+                              enabledBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(12),
+                                borderSide: const BorderSide(color: Color(0xFFCBD5E1)),
+                              ),
+                              focusedBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(12),
+                                borderSide: const BorderSide(color: AppColors.royalBlue, width: 1.5),
+                              ),
+                              isDense: true,
+                            ),
+                            style: const TextStyle(fontSize: 13, color: AppColors.textDark, fontWeight: FontWeight.w600),
+                            items: [
+                              const DropdownMenuItem(value: 'all', child: Text('🌐 Semua Cabang (Umum)')),
+                              ..._branches.map((b) => DropdownMenuItem(value: b.id, child: Text('🏢 ${b.nama}'))),
+                            ],
+                            onChanged: (v) => setS(() => selectedBranch = v ?? 'all'),
+                          ),
+                          const SizedBox(height: 14),
+
+                          // ── Field Rekening Bank (hanya jika mode == 'bank') ──
+                          if (mode == 'bank') ...[
+                            // Quick Bank Chips
+                            const Text(
+                              'Pilih Bank Populer:',
+                              style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: AppColors.textMuted),
+                            ),
+                            const SizedBox(height: 6),
+                            Wrap(
+                              spacing: 6,
+                              runSpacing: 6,
+                              children: quickBanks.map((b) {
+                                final selected = bankCtrl.text.trim().toUpperCase() == b.toUpperCase();
+                                return ChoiceChip(
+                                  label: Text(
+                                    b,
+                                    style: TextStyle(
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.w700,
+                                      color: selected ? Colors.white : AppColors.textDark,
+                                    ),
+                                  ),
+                                  selected: selected,
+                                  selectedColor: AppColors.royalBlue,
+                                  backgroundColor: const Color(0xFFF1F5F9),
+                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 0),
+                                  side: BorderSide.none,
+                                  onSelected: (_) {
+                                    setS(() {
+                                      bankCtrl.text = b;
+                                    });
+                                  },
+                                );
+                              }).toList(),
+                            ),
+                            const SizedBox(height: 14),
+
+                            // Nama Bank Input
+                            const Text(
+                              'Nama Bank',
+                              style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: AppColors.textDark),
+                            ),
+                            const SizedBox(height: 6),
+                            TextField(
+                              controller: bankCtrl,
+                              onChanged: (_) => setS(() {}),
+                              decoration: InputDecoration(
+                                prefixIcon: const Icon(Icons.account_balance_rounded, size: 18, color: AppColors.royalBlue),
+                                hintText: 'Contoh: BCA / BRI / Mandiri',
+                                hintStyle: const TextStyle(color: AppColors.textMuted, fontSize: 12),
+                                filled: true,
+                                fillColor: const Color(0xFFF8FAFC),
+                                contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                                border: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                  borderSide: const BorderSide(color: Color(0xFFCBD5E1)),
+                                ),
+                                enabledBorder: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                  borderSide: const BorderSide(color: Color(0xFFCBD5E1)),
+                                ),
+                                focusedBorder: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                  borderSide: const BorderSide(color: AppColors.royalBlue, width: 1.5),
+                                ),
+                                isDense: true,
+                              ),
+                              style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+                            ),
+                            const SizedBox(height: 14),
+
+                            // Nomor Rekening Input
+                            const Text(
+                              'Nomor Rekening',
+                              style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: AppColors.textDark),
+                            ),
+                            const SizedBox(height: 6),
+                            TextField(
+                              controller: numberCtrl,
+                              keyboardType: TextInputType.number,
+                              inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                              decoration: InputDecoration(
+                                prefixIcon: const Icon(Icons.credit_card_rounded, size: 18, color: AppColors.royalBlue),
+                                hintText: 'Contoh: 1234567890',
+                                hintStyle: const TextStyle(color: AppColors.textMuted, fontSize: 12),
+                                filled: true,
+                                fillColor: const Color(0xFFF8FAFC),
+                                contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                                border: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                  borderSide: const BorderSide(color: Color(0xFFCBD5E1)),
+                                ),
+                                enabledBorder: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                  borderSide: const BorderSide(color: Color(0xFFCBD5E1)),
+                                ),
+                                focusedBorder: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                  borderSide: const BorderSide(color: AppColors.royalBlue, width: 1.5),
+                                ),
+                                isDense: true,
+                              ),
+                              style: TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w700,
+                                fontFamily: GoogleFonts.spaceGrotesk().fontFamily,
+                              ),
+                            ),
+                            const SizedBox(height: 14),
+
+                            // Nama Pemilik Input
+                            const Text(
+                              'Nama Pemilik (Atas Nama)',
+                              style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: AppColors.textDark),
+                            ),
+                            const SizedBox(height: 6),
+                            TextField(
+                              controller: nameCtrl,
+                              decoration: InputDecoration(
+                                prefixIcon: const Icon(Icons.person_rounded, size: 18, color: AppColors.royalBlue),
+                                hintText: 'Contoh: PT GALAXI GADAI INDONESIA',
+                                hintStyle: const TextStyle(color: AppColors.textMuted, fontSize: 12),
+                                filled: true,
+                                fillColor: const Color(0xFFF8FAFC),
+                                contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                                border: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                  borderSide: const BorderSide(color: Color(0xFFCBD5E1)),
+                                ),
+                                enabledBorder: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                  borderSide: const BorderSide(color: Color(0xFFCBD5E1)),
+                                ),
+                                focusedBorder: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                  borderSide: const BorderSide(color: AppColors.royalBlue, width: 1.5),
+                                ),
+                                isDense: true,
+                              ),
+                              style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+                            ),
+                            const SizedBox(height: 16),
+                          ],
+
+                          // Status Switch Container Card
+                          Container(
+                            padding: const EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                              color: isActive ? const Color(0xFFF0FDF4) : const Color(0xFFF8FAFC),
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(
+                                color: isActive ? const Color(0xFFBBF7D0) : const Color(0xFFE2E8F0),
+                              ),
+                            ),
+                            child: Row(
+                              children: [
+                                Icon(
+                                  Icons.power_settings_new_rounded,
+                                  color: isActive ? AppColors.emerald : const Color(0xFF64748B),
+                                  size: 20,
+                                ),
+                                const SizedBox(width: 10),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        'Status: ${isActive ? "Aktif" : "Nonaktif"}',
+                                        style: TextStyle(
+                                          fontSize: 12,
+                                          fontWeight: FontWeight.w700,
+                                          color: isActive ? AppColors.emerald : const Color(0xFF64748B),
+                                        ),
+                                      ),
+                                      const Text(
+                                        'Tampilkan ke pilihan nasabah',
+                                        style: TextStyle(fontSize: 10, color: AppColors.textMuted),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                Switch(
+                                  value: isActive,
+                                  activeColor: AppColors.emerald,
+                                  onChanged: (v) => setS(() => isActive = v),
+                                ),
+                              ],
+                            ),
+                          ),
+
+                          // ── QRIS Section ──
+                          const SizedBox(height: 16),
+                          Row(
+                            children: [
+                              Text(
+                                mode == 'qris' ? 'Upload Gambar QRIS (Wajib)' : 'Gambar QRIS (Opsional)',
+                                style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: AppColors.textDark),
+                              ),
+                              if (mode == 'qris') ...[
+                                const SizedBox(width: 4),
+                                const Text('*', style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold)),
+                              ],
+                            ],
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            mode == 'qris'
+                                ? 'Pilih gambar barcode QRIS dari HP untuk ditampilkan langsung ke nasabah'
+                                : 'Upload kode QRIS jika ingin menyertakan QRIS pada rekening bank ini',
+                            style: const TextStyle(fontSize: 10, color: AppColors.textMuted),
+                          ),
+                          const SizedBox(height: 8),
+                          Container(
+                            width: double.infinity,
+                            decoration: BoxDecoration(
+                              color: qrisPreviewUrl.isNotEmpty || qrisXFile != null
+                                  ? const Color(0xFFF0FDF4)
+                                  : const Color(0xFFF8FAFC),
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(
+                                color: qrisPreviewUrl.isNotEmpty || qrisXFile != null
+                                    ? const Color(0xFF86EFAC)
+                                    : const Color(0xFFCBD5E1),
+                              ),
+                            ),
+                            child: Column(
+                              children: [
+                                // Preview
+                                if (qrisXFile != null)
+                                  Padding(
+                                    padding: const EdgeInsets.all(10),
+                                    child: ClipRRect(
+                                      borderRadius: BorderRadius.circular(8),
+                                      child: FutureBuilder<Uint8List>(
+                                        future: qrisXFile!.readAsBytes(),
+                                        builder: (_, snap) => snap.hasData
+                                            ? Image.memory(snap.data!, height: 180, fit: BoxFit.contain)
+                                            : const SizedBox(height: 80, child: Center(child: CircularProgressIndicator())),
+                                      ),
+                                    ),
+                                  )
+                                else if (qrisPreviewUrl.isNotEmpty)
+                                  Padding(
+                                    padding: const EdgeInsets.all(10),
+                                    child: ClipRRect(
+                                      borderRadius: BorderRadius.circular(8),
+                                      child: Image.network(
+                                        qrisPreviewUrl,
+                                        height: 180,
+                                        fit: BoxFit.contain,
+                                        errorBuilder: (_, __, ___) => const Icon(
+                                          Icons.broken_image_outlined,
+                                          size: 60,
+                                          color: AppColors.textMuted,
+                                        ),
+                                      ),
+                                    ),
+                                  )
+                                else
+                                  Padding(
+                                    padding: const EdgeInsets.symmetric(vertical: 24),
+                                    child: Column(
+                                      children: const [
+                                        Icon(Icons.qr_code_scanner_rounded, size: 44, color: Color(0xFFCBD5E1)),
+                                        SizedBox(height: 6),
+                                        Text('Belum ada gambar QRIS', style: TextStyle(color: AppColors.textMuted, fontSize: 12)),
+                                      ],
+                                    ),
+                                  ),
+                                // Upload Button
+                                Padding(
+                                  padding: const EdgeInsets.fromLTRB(10, 0, 10, 10),
+                                  child: SizedBox(
+                                    width: double.infinity,
+                                    child: OutlinedButton.icon(
+                                      onPressed: () async {
+                                        final picker = ImagePicker();
+                                        final picked = await picker.pickImage(
+                                          source: ImageSource.gallery,
+                                          imageQuality: 90,
+                                          maxWidth: 1200,
+                                        );
+                                        if (picked != null) setS(() => qrisXFile = picked);
+                                      },
+                                      icon: const Icon(Icons.upload_rounded, size: 16),
+                                      label: Text(
+                                        qrisPreviewUrl.isNotEmpty || qrisXFile != null ? 'Ganti Gambar QRIS' : 'Pilih Gambar QRIS',
+                                        style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+                                      ),
+                                      style: OutlinedButton.styleFrom(
+                                        foregroundColor: mode == 'qris' ? const Color(0xFFD97706) : AppColors.royalBlue,
+                                        side: BorderSide(color: mode == 'qris' ? const Color(0xFFF59E0B) : AppColors.royalBlue),
+                                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                        padding: const EdgeInsets.symmetric(vertical: 10),
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+
+                  // Actions Footer Bar
+                  Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: const BoxDecoration(
+                      color: Color(0xFFF8FAFC),
+                      border: Border(top: BorderSide(color: Color(0xFFE2E8F0))),
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.end,
+                      children: [
+                        OutlinedButton(
+                          onPressed: () => Navigator.pop(ctx),
+                          style: OutlinedButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                            side: const BorderSide(color: Color(0xFFCBD5E1)),
+                          ),
+                          child: const Text(
+                            'Batal',
+                            style: TextStyle(color: AppColors.textDark, fontWeight: FontWeight.w700),
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        ElevatedButton.icon(
+                          onPressed: () async {
+                            final bank = mode == 'qris' ? 'QRIS' : bankCtrl.text.trim();
+                            final number = mode == 'qris' ? '-' : numberCtrl.text.trim();
+                            final name = mode == 'qris' ? 'QRIS Pembayaran' : nameCtrl.text.trim();
+
+                            if (mode == 'bank' && (bank.isEmpty || number.isEmpty || name.isEmpty)) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text('Harap isi semua bidang input bank'),
+                                  backgroundColor: AppColors.coral,
+                                ),
+                              );
+                              return;
+                            }
+
+                            if (mode == 'qris' && qrisXFile == null && qrisPreviewUrl.isEmpty) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text('Harap upload gambar QRIS terlebih dahulu'),
+                                  backgroundColor: AppColors.coral,
+                                ),
+                              );
+                              return;
+                            }
+
+                            Navigator.pop(ctx);
+                            try {
+                              String? targetId;
+                              if (isEdit) {
+                                targetId = rekening.id;
+                                await _svc.updateRekeningGadai(
+                                  id: rekening.id,
+                                  bankName: bank,
+                                  accountNumber: number,
+                                  accountName: name,
+                                  isActive: isActive,
+                                  branchId: selectedBranch == 'all' ? null : selectedBranch,
+                                );
+                              } else {
+                                targetId = await _svc.saveRekeningGadai(
+                                  bankName: bank,
+                                  accountNumber: number,
+                                  accountName: name,
+                                  branchId: selectedBranch == 'all' ? null : selectedBranch,
+                                );
+                              }
+                              await _loadData();
+
+                              // Upload QRIS jika ada gambar baru dipilih
+                              if (qrisXFile != null && targetId != null) {
+                                final bytes = await qrisXFile!.readAsBytes();
+                                await _svc.uploadQrisImage(rekeningId: targetId, imageBytes: bytes);
+                                await _loadData();
+                              }
+
+                              if (!mounted) return;
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Row(
+                                    children: [
+                                      const Icon(Icons.check_circle_rounded, color: Colors.white, size: 16),
+                                      const SizedBox(width: 8),
+                                      Text(mode == 'qris' ? 'Gambar QRIS berhasil disimpan!' : 'Rekening berhasil disimpan!'),
+                                    ],
+                                  ),
+                                  backgroundColor: AppColors.emerald,
+                                  behavior: SnackBarBehavior.floating,
+                                ),
+                              );
+                            } catch (e) {
+                              if (!mounted) return;
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(content: Text('Gagal menyimpan: $e'), backgroundColor: AppColors.coral),
+                              );
+                            }
+                          },
+                          icon: Icon(mode == 'qris' ? Icons.qr_code_rounded : Icons.check_circle_rounded, size: 18, color: Colors.white),
+                          label: Text(
+                            mode == 'qris'
+                                ? (isEdit ? 'Simpan Gambar QRIS' : 'Simpan QRIS Baru')
+                                : (isEdit ? 'Simpan Perubahan' : 'Simpan Rekening'),
+                            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                          ),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: mode == 'qris' ? const Color(0xFFD97706) : AppColors.royalBlue,
+                            elevation: 4,
+                            shadowColor: mode == 'qris'
+                                ? const Color(0xFFD97706).withValues(alpha: 0.3)
+                                : AppColors.royalBlue.withValues(alpha: 0.3),
+                            padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  Future<void> _confirmDeleteRekening(String id) async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        clipBehavior: Clip.antiAlias,
+        contentPadding: const EdgeInsets.all(24),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: const BoxDecoration(
+                color: Color(0xFFFEF2F2),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(Icons.warning_amber_rounded, color: AppColors.coral, size: 36),
+            ),
+            const SizedBox(height: 14),
+            const Text(
+              'Hapus Rekening Bank?',
+              style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: AppColors.textDark),
+            ),
+            const SizedBox(height: 6),
+            const Text(
+              'Nomor rekening ini akan dihapus permanen dari sistem dan tidak dapat dipilih nasabah saat pembayaran.',
+              textAlign: TextAlign.center,
+              style: TextStyle(fontSize: 12, color: AppColors.textMuted, height: 1.4),
+            ),
+            const SizedBox(height: 20),
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton(
+                    onPressed: () => Navigator.pop(ctx, false),
+                    style: OutlinedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      side: const BorderSide(color: Color(0xFFCBD5E1)),
+                    ),
+                    child: const Text(
+                      'Batal',
+                      style: TextStyle(color: AppColors.textDark, fontWeight: FontWeight.w700),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: ElevatedButton(
+                    onPressed: () => Navigator.pop(ctx, true),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppColors.coral,
+                      elevation: 4,
+                      shadowColor: AppColors.coral.withValues(alpha: 0.3),
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    ),
+                    child: const Text(
+                      'Ya, Hapus',
+                      style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+    if (ok == true) {
+      await _svc.deleteRekeningGadai(id);
+      await _loadData();
+    }
   }
 
   Widget _kpiCard(String label, String value, IconData icon, Color color) {

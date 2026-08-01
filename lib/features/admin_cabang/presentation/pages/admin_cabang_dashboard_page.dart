@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:galaxi_gadai/core/constants/app_colors.dart';
-import 'package:galaxi_gadai/core/data/mock_data.dart';
+import 'package:galaxi_gadai/core/data/data_models.dart';
 import 'package:galaxi_gadai/core/services/supabase_gadai_service.dart';
+import 'package:galaxi_gadai/core/services/fcm_service.dart';
 import 'package:galaxi_gadai/features/auth/presentation/pages/role_portal_page.dart';
 import 'package:galaxi_gadai/features/pawn/presentation/pages/new_pawn_page.dart';
 import 'package:galaxi_gadai/features/pawn/presentation/pages/transaksi_detail_page.dart';
@@ -15,6 +17,9 @@ import 'barang_terjual_page.dart';
 import 'history_transaksi_page.dart';
 import 'file_pendukung_page.dart';
 import 'kas_page.dart';
+import 'verifikasi_pembayaran_page.dart';
+import 'package:galaxi_gadai/core/widgets/gadai_print_settings_page.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 class AdminCabangDashboardPage extends StatefulWidget {
   final String namaAdmin;
@@ -40,11 +45,54 @@ class _AdminCabangDashboardPageState extends State<AdminCabangDashboardPage> {
   List<Customer> _customers = [];
   bool _isLoading = true;
   int _walletBalance = 0;
+  int _pendingPaymentsCount = 0; // badge verifikasi pembayaran
 
   @override
   void initState() {
     super.initState();
     _loadData();
+    // Inisialisasi FCM + request permission + simpan token
+    _initFcm();
+  }
+
+  Future<void> _initFcm() async {
+    await FcmService.instance.initialize();
+    final status = await FcmService.instance.requestPermission();
+
+    if (!mounted) return;
+
+    if (status == NotifPermissionStatus.denied ||
+        status == NotifPermissionStatus.permanentlyDenied) {
+      // Delay agar UI sudah siap sebelum tampilkan snackbar
+      await Future.delayed(const Duration(milliseconds: 800));
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text(
+            '🔔 Notifikasi dinonaktifkan. Aktifkan di Pengaturan → Aplikasi → Galaxi Gadai → Notifikasi.',
+          ),
+          backgroundColor: const Color(0xFFF59E0B),
+          behavior: SnackBarBehavior.floating,
+          duration: const Duration(seconds: 6),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          action: SnackBarAction(
+            label: 'Buka Pengaturan',
+            textColor: Colors.white,
+            onPressed: () {
+              // Buka halaman notif app di Settings Android
+              // Tidak butuh package tambahan — pakai intent via platform channel
+              const channel = MethodChannel('galaxi_gadai/settings');
+              channel.invokeMethod('openNotificationSettings').catchError((_) {});
+            },
+          ),
+        ),
+      );
+    }
+
+    final userId = Supabase.instance.client.auth.currentUser?.id;
+    if (userId != null) {
+      await FcmService.instance.saveStaffFcmToken(userId);
+    }
   }
 
   @override
@@ -62,11 +110,13 @@ class _AdminCabangDashboardPageState extends State<AdminCabangDashboardPage> {
       final txs = await _svc.fetchTransactions(branchId: widget.cabangId);
       final customers = await _svc.fetchNasabah(branchId: widget.cabangId);
       final walletBalance = await _svc.fetchWalletBalance(widget.cabangId);
+      final pendingPayments = await _svc.fetchPendingPayments(branchId: widget.cabangId);
       if (!mounted) return;
       setState(() {
         _txs = txs;
         _customers = customers;
         _walletBalance = walletBalance;
+        _pendingPaymentsCount = pendingPayments.length;
         _isLoading = false;
       });
     } catch (_) {
@@ -108,47 +158,7 @@ class _AdminCabangDashboardPageState extends State<AdminCabangDashboardPage> {
     );
   }
 
-  // ── WALLET TOPUP DIALOG ──
-  void _showTopUpDialog() {
-    final amountCtrl = TextEditingController();
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: const Text('Top Up Saldo Tenant'),
-        content: TextField(
-          controller: amountCtrl,
-          keyboardType: TextInputType.number,
-          decoration: const InputDecoration(
-            labelText: 'Nominal TopUp (Rp)',
-            border: OutlineInputBorder(),
-            prefixText: 'Rp ',
-          ),
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Batal')),
-          ElevatedButton(
-            onPressed: () async {
-              final amt = int.tryParse(amountCtrl.text) ?? 0;
-              if (amt > 0) {
-                Navigator.pop(ctx);
-                await _svc.walletTopUp(widget.cabangId, amt, 'Top Up Saldo Tenant');
-                await _loadData(); // refresh saldo dari Supabase
-                if (!mounted) return;
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text('Top Up Rp ${_formatCurrency(amt)} Berhasil!'),
-                    backgroundColor: Colors.green,
-                  ),
-                );
-              }
-            },
-            child: const Text('Top Up'),
-          ),
-        ],
-      ),
-    );
-  }
+
 
   // ── WHATSAPP GROUP DIALOG ──
   void _showWhatsAppDialog() {
@@ -160,14 +170,14 @@ class _AdminCabangDashboardPageState extends State<AdminCabangDashboardPage> {
           children: [
             Icon(Icons.chat_bubble_outline_rounded, color: Colors.green, size: 24),
             SizedBox(width: 10),
-            Text('Gabung Grup Tenant'),
+            Text('Gabung Grup Cabang'),
           ],
         ),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             const Text(
-              'Gabung ke grup WhatsApp Tenant Galaxi Gadai untuk koordinasi harian dan update info penting.',
+              'Gabung ke grup WhatsApp Galaxi Gadai untuk koordinasi harian dan update info penting.',
               textAlign: TextAlign.center,
               style: TextStyle(fontSize: 13),
             ),
@@ -211,31 +221,41 @@ class _AdminCabangDashboardPageState extends State<AdminCabangDashboardPage> {
   // ── SEARCH HANDLER ──
   void _handleSearch() {
     final query = _searchController.text.trim();
-    if (query.isEmpty) return;
-
-    // Cari nasabah yang cocok
-    final matchingCust = _customers.where((c) => c.name.toLowerCase().contains(query.toLowerCase())).toList();
-    
-    // Cari transaksi yang cocok
-    final matchingTx = _txs.where((t) => t.id.toLowerCase().contains(query.toLowerCase())).toList();
-
-    if (matchingTx.isNotEmpty) {
-      // Jika nomor kontrak langsung ketemu
-      Navigator.push(
-        context,
-        MaterialPageRoute(builder: (_) => TransaksiDetailPage(transaction: matchingTx.first)),
-      ).then((_) => _loadData());
-    } else if (matchingCust.isNotEmpty) {
-      // Buka pencarian nasabah yang di-filter
+    if (query.isEmpty) {
       Navigator.push(
         context,
         MaterialPageRoute(builder: (_) => CustomerSearchPage(isTab: false, branchId: widget.cabangId)),
       ).then((_) => _loadData());
-    } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Nasabah atau nomor kontrak tidak ditemukan.')),
-      );
+      return;
     }
+
+    final q = query.toLowerCase();
+
+    // 1. Cek jika query persis cocok dengan 1 nomor kontrak/ID transaksi
+    final exactTx = _txs.where((t) =>
+      t.displayCode.toLowerCase() == q ||
+      t.id.toLowerCase() == q
+    ).toList();
+
+    if (exactTx.length == 1) {
+      Navigator.push(
+        context,
+        MaterialPageRoute(builder: (_) => TransaksiDetailPage(transaction: exactTx.first)),
+      ).then((_) => _loadData());
+      return;
+    }
+
+    // 2. Buka halaman pencarian nasabah & transaksi dengan query awal
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => CustomerSearchPage(
+          isTab: false,
+          branchId: widget.cabangId,
+          initialQuery: query,
+        ),
+      ),
+    ).then((_) => _loadData());
   }
 
   @override
@@ -265,7 +285,13 @@ class _AdminCabangDashboardPageState extends State<AdminCabangDashboardPage> {
     final months = ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'];
     final formattedDate = '${days[today.weekday % 7]}, ${today.day} ${months[today.month - 1]} ${today.year}';
 
-    return Scaffold(
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, result) {
+        if (didPop) return;
+        SystemNavigator.pop();
+      },
+      child: Scaffold(
       backgroundColor: const Color(0xFFDBEAFE),
       body: SingleChildScrollView(
         child: Column(
@@ -351,7 +377,7 @@ class _AdminCabangDashboardPageState extends State<AdminCabangDashboardPage> {
                       _buildTopStatRow(Icons.gavel_rounded, 'Siap Lelang', '$siapLelang'),
                       const SizedBox(height: 24),
 
-                      // 2. Saldo Tenant Card (Glassmorphic Blue Accent)
+                      // 2. Saldo Rekening Gadai Card (Glassmorphic Blue Accent)
                       Container(
                         width: double.infinity,
                         padding: const EdgeInsets.all(20),
@@ -372,10 +398,10 @@ class _AdminCabangDashboardPageState extends State<AdminCabangDashboardPage> {
                           children: [
                             Row(
                               children: [
-                                const Icon(Icons.wallet_rounded, color: Color(0xFF93C5FD), size: 18),
+                                const Icon(Icons.account_balance_rounded, color: Color(0xFF93C5FD), size: 18),
                                 const SizedBox(width: 8),
                                 Text(
-                                  'Saldo Tenant',
+                                  'Saldo Rekening Gadai',
                                   style: GoogleFonts.inter(color: Colors.white.withValues(alpha: 0.7), fontSize: 12, fontWeight: FontWeight.w600),
                                 ),
                               ],
@@ -386,38 +412,87 @@ class _AdminCabangDashboardPageState extends State<AdminCabangDashboardPage> {
                               style: GoogleFonts.inter(color: Colors.white, fontSize: 26, fontWeight: FontWeight.w800, letterSpacing: -0.5),
                             ),
                             const SizedBox(height: 18),
-                            Row(
-                              children: [
-                                Expanded(
-                                  child: TextButton.icon(
-                                    onPressed: _showTopUpDialog,
-                                    icon: const Icon(Icons.add_rounded, color: Colors.white, size: 16),
-                                    label: Text('TopUp', style: GoogleFonts.inter(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 13)),
-                                    style: TextButton.styleFrom(
-                                      backgroundColor: AppColors.royalBlue,
-                                      padding: const EdgeInsets.symmetric(vertical: 11),
-                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                                    ),
-                                  ),
+                            SizedBox(
+                              width: double.infinity,
+                              child: TextButton.icon(
+                                onPressed: () {
+                                  Navigator.push(context, MaterialPageRoute(builder: (_) => MutasiSaldoPage(branchId: widget.cabangId)));
+                                },
+                                icon: const Icon(Icons.list_alt_rounded, color: Colors.white, size: 16),
+                                label: Text('Lihat Riwayat Mutasi', style: GoogleFonts.inter(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 13)),
+                                style: TextButton.styleFrom(
+                                  backgroundColor: Colors.white.withValues(alpha: 0.15),
+                                  padding: const EdgeInsets.symmetric(vertical: 11),
+                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                                 ),
-                                const SizedBox(width: 12),
-                                Expanded(
-                                  child: TextButton.icon(
-                                    onPressed: () {
-                                      Navigator.push(context, MaterialPageRoute(builder: (_) => MutasiSaldoPage(branchId: widget.cabangId)));
-                                    },
-                                    icon: const Icon(Icons.list_alt_rounded, color: Colors.white, size: 16),
-                                    label: Text('Mutasi', style: GoogleFonts.inter(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 13)),
-                                    style: TextButton.styleFrom(
-                                      backgroundColor: Colors.white.withValues(alpha: 0.15),
-                                      padding: const EdgeInsets.symmetric(vertical: 11),
-                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                                    ),
-                                  ),
-                                ),
-                              ],
+                              ),
                             ),
                           ],
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+
+                      // 3. Uang Kas Card
+                      GestureDetector(
+                        onTap: () {
+                          Navigator.push(context, MaterialPageRoute(
+                            builder: (_) => KasPage(branchId: widget.cabangId, namaCabang: widget.namaCabang),
+                          )).then((_) => _loadData());
+                        },
+                        child: Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+                          decoration: BoxDecoration(
+                            color: Colors.white.withValues(alpha: 0.08),
+                            borderRadius: BorderRadius.circular(16),
+                            border: Border.all(color: Colors.white.withValues(alpha: 0.15)),
+                          ),
+                          child: Row(
+                            children: [
+                              const Icon(Icons.account_balance_wallet_rounded, color: Color(0xFF6EE7B7), size: 20),
+                              const SizedBox(width: 10),
+                              Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    'Uang Kas',
+                                    style: GoogleFonts.inter(
+                                      color: Colors.white.withValues(alpha: 0.7),
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.w500,
+                                    ),
+                                  ),
+                                  Text(
+                                    'Rp ${_formatCurrency(_walletBalance)}',
+                                    style: GoogleFonts.inter(
+                                      color: const Color(0xFF6EE7B7),
+                                      fontSize: 15,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const Spacer(),
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                                decoration: BoxDecoration(
+                                  color: Colors.white.withValues(alpha: 0.12),
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Text(
+                                      'Detail',
+                                      style: GoogleFonts.inter(color: Colors.white.withValues(alpha: 0.9), fontSize: 11, fontWeight: FontWeight.w600),
+                                    ),
+                                    const SizedBox(width: 3),
+                                    const Icon(Icons.chevron_right_rounded, color: Colors.white70, size: 16),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
                         ),
                       ),
                     ],
@@ -444,9 +519,11 @@ class _AdminCabangDashboardPageState extends State<AdminCabangDashboardPage> {
                       ),
                       child: TextField(
                         controller: _searchController,
+                        textInputAction: TextInputAction.search,
+                        onSubmitted: (_) => _handleSearch(),
                         style: GoogleFonts.inter(color: AppColors.textDark, fontSize: 14),
                         decoration: InputDecoration(
-                          hintText: 'Cari nama nasabah atau nomor kontrak...',
+                          hintText: 'Cari nama nasabah, NIK, HP, atau nomor kontrak...',
                           hintStyle: GoogleFonts.inter(color: Colors.grey.shade400, fontSize: 13),
                           filled: true,
                           fillColor: Colors.white,
@@ -503,93 +580,115 @@ class _AdminCabangDashboardPageState extends State<AdminCabangDashboardPage> {
                   ),
                   const SizedBox(height: 16),
 
-                  // 9-Button Grid Layout
+                  // 10-Button Grid Layout
                   GridView.count(
                     crossAxisCount: 4,
                     shrinkWrap: true,
                     physics: const NeverScrollableScrollPhysics(),
                     mainAxisSpacing: 16,
                     crossAxisSpacing: 12,
-                    childAspectRatio: 0.85,
+                    childAspectRatio: 0.65,
                     children: [
-                      _buildGridItem('Gadai', Icons.monetization_on_outlined, () {
-                        Navigator.push(context, MaterialPageRoute(builder: (_) => NewPawnPage(branchId: widget.cabangId))).then((_) => _loadData());
-                      }),
-                      _buildGridItem('Barang', Icons.inventory_2_outlined, () {
-                        Navigator.push(context, MaterialPageRoute(builder: (_) => DataGadaiBarangPage(branchId: widget.cabangId, namaCabang: widget.namaCabang))).then((_) => _loadData());
-                      }),
-                      _buildGridItem('Nasabah', Icons.people_outline_rounded, () {
-                        Navigator.push(context, MaterialPageRoute(builder: (_) => CustomerSearchPage(isTab: false, branchId: widget.cabangId)));
-                      }),
-                      _buildGridItem('Laporan', Icons.analytics_outlined, () {
-                        Navigator.push(context, MaterialPageRoute(
-                          builder: (_) => Scaffold(
-                            appBar: AppBar(title: Text('Laporan Cabang', style: GoogleFonts.poppins(color: const Color(0xFF1E3A6E), fontWeight: FontWeight.bold, fontSize: 18)), backgroundColor: const Color(0xFF93C5FD), iconTheme: const IconThemeData(color: Color(0xFF1E3A6E))),
-                            body: LaporanTabContent(branchId: widget.cabangId),
-                          ),
-                        ));
-                      }),
-                      _buildGridItem('Uang Kas', Icons.account_balance_wallet_rounded, () {
-                        Navigator.push(context, MaterialPageRoute(
-                          builder: (_) => KasPage(branchId: widget.cabangId, namaCabang: widget.namaCabang),
-                        )).then((_) => _loadData());
-                      }),
-                      _buildGridItem('Lelang', Icons.gavel_rounded, () {
-                        Navigator.push(context, MaterialPageRoute(builder: (_) => LelangPage(branchId: widget.cabangId)));
-                      }),
-                      _buildGridItem('Barang Terjual', Icons.trending_up_rounded, () {
-                        Navigator.push(context, MaterialPageRoute(builder: (_) => BarangTerjualPage(branchId: widget.cabangId)));
-                      }),
-                      _buildGridItem('History', Icons.list_alt_rounded, () {
-                        Navigator.push(context, MaterialPageRoute(builder: (_) => HistoryTransaksiPage(branchId: widget.cabangId)));
-                      }),
-                      _buildGridItem('File Pendukung', Icons.folder_open_rounded, () {
-                        Navigator.push(context, MaterialPageRoute(builder: (_) => FilePendukungPage(branchId: widget.cabangId)));
-                      }),
+                      _buildGridItem(
+                        'Gadai',
+                        Icons.monetization_on_outlined,
+                        () {
+                          Navigator.push(context, MaterialPageRoute(builder: (_) => NewPawnPage(branchId: widget.cabangId))).then((_) => _loadData());
+                        },
+                        iconColor: const Color(0xFF2563EB),
+                      ),
+                      _buildGridItem(
+                        'Barang',
+                        Icons.inventory_2_outlined,
+                        () {
+                          Navigator.push(context, MaterialPageRoute(builder: (_) => DataGadaiBarangPage(branchId: widget.cabangId, namaCabang: widget.namaCabang))).then((_) => _loadData());
+                        },
+                        iconColor: const Color(0xFF0EA5E9),
+                      ),
+                      _buildGridItem(
+                        'Nasabah',
+                        Icons.people_outline_rounded,
+                        () {
+                          Navigator.push(context, MaterialPageRoute(builder: (_) => CustomerSearchPage(isTab: false, branchId: widget.cabangId)));
+                        },
+                        iconColor: const Color(0xFF8B5CF6),
+                      ),
+                      _buildGridItem(
+                        'Laporan',
+                        Icons.analytics_outlined,
+                        () {
+                          Navigator.push(context, MaterialPageRoute(
+                            builder: (_) => Scaffold(
+                              appBar: AppBar(title: Text('Laporan Cabang', style: GoogleFonts.poppins(color: const Color(0xFF1E3A6E), fontWeight: FontWeight.bold, fontSize: 18)), backgroundColor: const Color(0xFF93C5FD), iconTheme: const IconThemeData(color: Color(0xFF1E3A6E))),
+                              body: LaporanTabContent(branchId: widget.cabangId),
+                            ),
+                          ));
+                        },
+                        iconColor: const Color(0xFFF59E0B),
+                      ),
+                      _buildGridItem(
+                        'Lelang',
+                        Icons.gavel_rounded,
+                        () {
+                          Navigator.push(context, MaterialPageRoute(builder: (_) => LelangPage(branchId: widget.cabangId)));
+                        },
+                        iconColor: const Color(0xFFEF4444),
+                      ),
+                      _buildGridItem(
+                        'Barang Terjual',
+                        Icons.trending_up_rounded,
+                        () {
+                          Navigator.push(context, MaterialPageRoute(builder: (_) => BarangTerjualPage(branchId: widget.cabangId)));
+                        },
+                        iconColor: const Color(0xFFEC4899),
+                      ),
+                      _buildGridItem(
+                        'History',
+                        Icons.list_alt_rounded,
+                        () {
+                          Navigator.push(context, MaterialPageRoute(builder: (_) => HistoryTransaksiPage(branchId: widget.cabangId)));
+                        },
+                        iconColor: const Color(0xFF64748B),
+                      ),
+                      _buildGridItem(
+                        'File Pendukung',
+                        Icons.folder_open_rounded,
+                        () {
+                          Navigator.push(context, MaterialPageRoute(builder: (_) => FilePendukungPage(branchId: widget.cabangId)));
+                        },
+                        iconColor: const Color(0xFFF97316),
+                      ),
+                      _buildGridItem(
+                        'Verifikasi Bayar',
+                        Icons.verified_rounded,
+                        () {
+                          Navigator.push(context, MaterialPageRoute(
+                            builder: (_) => VerifikasiPembayaranPage(
+                              cabangId: widget.cabangId,
+                              namaAdmin: widget.namaAdmin,
+                            ),
+                          )).then((_) => _loadData());
+                        },
+                        iconColor: const Color(0xFFF59E0B),
+                        badgeCount: _pendingPaymentsCount,
+                      ),
+                      _buildGridItem(
+                        'Grup Cabang',
+                        Icons.chat_bubble_outline_rounded,
+                        _showWhatsAppDialog,
+                        iconColor: const Color(0xFF22C55E),
+                      ),
+                      _buildGridItem(
+                        'Printer',
+                        Icons.print_rounded,
+                        () {
+                          Navigator.push(context, MaterialPageRoute(builder: (_) => const GadaiPrintSettingsPage()));
+                        },
+                        iconColor: const Color(0xFF64748B),
+                      ),
                     ],
                   ),
-                  const SizedBox(height: 24),
-
-                  // WhatsApp Group button in its own card
-                  GestureDetector(
-                    onTap: _showWhatsAppDialog,
-                    child: Container(
-                      width: 90,
-                      margin: const EdgeInsets.only(bottom: 30),
-                      child: Column(
-                        children: [
-                          Container(
-                            width: 68,
-                            height: 68,
-                            decoration: BoxDecoration(
-                              gradient: const LinearGradient(
-                                colors: [Color(0xFF10B981), Color(0xFF059669)],
-                                begin: Alignment.topLeft,
-                                end: Alignment.bottomRight,
-                              ),
-                              borderRadius: BorderRadius.circular(18),
-                              boxShadow: [
-                                BoxShadow(
-                                  color: const Color(0xFF10B981).withValues(alpha: 0.25),
-                                  blurRadius: 10,
-                                  offset: const Offset(0, 4),
-                                )
-                              ],
-                            ),
-                            child: const Center(
-                              child: Icon(Icons.chat_bubble_outline_rounded, color: Colors.white, size: 28),
-                            ),
-                          ),
-                          const SizedBox(height: 6),
-                          Text(
-                            'Gabung Group Tenant',
-                            textAlign: TextAlign.center,
-                            style: GoogleFonts.inter(fontSize: 11, color: AppColors.textDark, fontWeight: FontWeight.w600, height: 1.2),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
+                  const SizedBox(height: 30),
                 ],
               ),
             ),
@@ -601,12 +700,46 @@ class _AdminCabangDashboardPageState extends State<AdminCabangDashboardPage> {
         elevation: 0,
         iconTheme: const IconThemeData(color: Colors.white),
         actions: [
+          // Badge notifikasi pembayaran pending
+          if (_pendingPaymentsCount > 0)
+            Stack(
+              children: [
+                IconButton(
+                  icon: const Icon(Icons.notifications_rounded, color: Colors.white),
+                  onPressed: () {
+                    Navigator.push(context, MaterialPageRoute(
+                      builder: (_) => VerifikasiPembayaranPage(
+                        cabangId: widget.cabangId,
+                        namaAdmin: widget.namaAdmin,
+                      ),
+                    )).then((_) => _loadData());
+                  },
+                ),
+                Positioned(
+                  right: 8, top: 8,
+                  child: Container(
+                    width: 18, height: 18,
+                    decoration: const BoxDecoration(
+                      color: Color(0xFFEF4444),
+                      shape: BoxShape.circle,
+                    ),
+                    child: Center(
+                      child: Text(
+                        _pendingPaymentsCount > 9 ? '9+' : '$_pendingPaymentsCount',
+                        style: GoogleFonts.inter(color: Colors.white, fontSize: 9, fontWeight: FontWeight.bold),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
           IconButton(
             icon: const Icon(Icons.logout_rounded, color: Colors.white),
             onPressed: _logout,
           ),
         ],
       ),
+    ),
     );
   }
 
@@ -632,35 +765,79 @@ class _AdminCabangDashboardPageState extends State<AdminCabangDashboardPage> {
     );
   }
 
-  Widget _buildGridItem(String label, IconData icon, VoidCallback onTap) {
+  Widget _buildGridItem(
+    String label,
+    IconData icon,
+    VoidCallback onTap, {
+    required Color iconColor,
+    int badgeCount = 0,
+  }) {
     return GestureDetector(
       onTap: onTap,
       child: Column(
+        mainAxisSize: MainAxisSize.min,
         children: [
-          Container(
-            width: 68,
-            height: 68,
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(18),
-              border: Border.all(color: const Color(0xFFE2E8F0)),
-              boxShadow: [
-                BoxShadow(
-                  color: const Color(0xFF0A1628).withValues(alpha: 0.03),
-                  blurRadius: 10,
-                  offset: const Offset(0, 4),
-                )
+          AspectRatio(
+            aspectRatio: 1.0,
+            child: Stack(
+              children: [
+                Container(
+                  width: double.infinity,
+                  height: double.infinity,
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(18),
+                    border: Border.all(color: badgeCount > 0 ? const Color(0xFFFCD34D) : const Color(0xFFE2E8F0)),
+                    boxShadow: [
+                      BoxShadow(
+                        color: const Color(0xFF0A1628).withValues(alpha: 0.03),
+                        blurRadius: 10,
+                        offset: const Offset(0, 4),
+                      )
+                    ],
+                  ),
+                  child: Center(
+                    child: Container(
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        color: iconColor.withValues(alpha: 0.1),
+                        shape: BoxShape.circle,
+                      ),
+                      child: Icon(icon, color: iconColor, size: 24),
+                    ),
+                  ),
+                ),
+                // Badge merah jika ada item pending
+                if (badgeCount > 0)
+                  Positioned(
+                    right: 4, top: 4,
+                    child: Container(
+                      padding: const EdgeInsets.all(4),
+                      decoration: const BoxDecoration(
+                        color: Color(0xFFEF4444),
+                        shape: BoxShape.circle,
+                      ),
+                      child: Text(
+                        badgeCount > 9 ? '9+' : '$badgeCount',
+                        style: GoogleFonts.inter(color: Colors.white, fontSize: 8, fontWeight: FontWeight.bold),
+                      ),
+                    ),
+                  ),
               ],
-            ),
-            child: Center(
-              child: Icon(icon, color: AppColors.royalBlue, size: 26),
             ),
           ),
           const SizedBox(height: 6),
           Text(
             label,
             textAlign: TextAlign.center,
-            style: GoogleFonts.inter(fontSize: 11, color: AppColors.textDark, fontWeight: FontWeight.w600, height: 1.2),
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            style: GoogleFonts.inter(
+              fontSize: 11,
+              color: AppColors.textDark,
+              fontWeight: FontWeight.w600,
+              height: 1.2,
+            ),
           ),
         ],
       ),

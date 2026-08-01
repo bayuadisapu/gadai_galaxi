@@ -1,8 +1,7 @@
-import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:galaxi_gadai/core/constants/app_colors.dart';
-import 'package:galaxi_gadai/core/data/mock_data.dart';
-import 'package:image_picker/image_picker.dart';
+import 'package:galaxi_gadai/core/data/data_models.dart';
+
 
 
 class Step3BiodataView extends StatefulWidget {
@@ -62,130 +61,6 @@ class Step3BiodataView extends StatefulWidget {
 }
 
 class _Step3BiodataViewState extends State<Step3BiodataView> {
-  // ── Foto state ──
-  XFile? _ktpPhoto;
-  XFile? _nasabahBarangPhoto;
-  XFile? _barangGadaiPhoto;
-  bool _isPickingKtp = false;
-  bool _isPickingNasabah = false;
-  bool _isPickingBarang = false;
-
-  // ── Helper: bottom sheet pilih sumber foto ──
-  Future<ImageSource?> _showSourcePicker(String title) async {
-    return showModalBottomSheet<ImageSource>(
-      context: context,
-      backgroundColor: Colors.white,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (ctx) => Padding(
-        padding: const EdgeInsets.symmetric(vertical: 12),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(width: 40, height: 4, decoration: BoxDecoration(color: Colors.grey.shade300, borderRadius: BorderRadius.circular(2))),
-            const SizedBox(height: 16),
-            Text(title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-            const SizedBox(height: 8),
-            ListTile(
-              leading: const CircleAvatar(backgroundColor: Color(0xFFEFF6FF), child: Icon(Icons.camera_alt_rounded, color: AppColors.primary)),
-              title: const Text('Ambil Foto dari Kamera'),
-              onTap: () => Navigator.pop(ctx, ImageSource.camera),
-            ),
-            ListTile(
-              leading: const CircleAvatar(backgroundColor: Color(0xFFEFF6FF), child: Icon(Icons.photo_library_rounded, color: AppColors.primary)),
-              title: const Text('Pilih dari Galeri'),
-              onTap: () => Navigator.pop(ctx, ImageSource.gallery),
-            ),
-            const SizedBox(height: 8),
-          ],
-        ),
-      ),
-    );
-  }
-
-  /// Ambil foto KTP — TIDAK auto-fill data, user isi manual
-  Future<void> _pickKtpPhoto() async {
-    if (_isPickingKtp) return;
-    // Jika sudah ada foto, tanya apakah ingin hapus
-    if (widget.ktpUploaded && _ktpPhoto != null) {
-      final bool? confirm = await showDialog<bool>(
-        context: context,
-        builder: (ctx) => AlertDialog(
-          title: const Text('Ganti Foto KTP?'),
-          content: const Text('Foto KTP yang sudah ada akan diganti.'),
-          actions: [
-            TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Batal')),
-            TextButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Ganti', style: TextStyle(color: Colors.red))),
-          ],
-        ),
-      );
-      if (confirm != true || !mounted) return;
-    }
-    final ImageSource? source = await _showSourcePicker('Unggah Foto KTP');
-    if (source == null || !mounted) return;
-    setState(() => _isPickingKtp = true);
-    try {
-      final XFile? picked = await ImagePicker().pickImage(source: source, imageQuality: 85, maxWidth: 1280);
-      if (!mounted) return;
-      if (picked != null) {
-        setState(() => _ktpPhoto = picked);
-        widget.onKtpUploadedChanged(true);
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Foto KTP berhasil diambil. Lengkapi data di bawah.'),
-            backgroundColor: Colors.green,
-            duration: Duration(seconds: 2),
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
-      }
-    } finally {
-      if (mounted) setState(() => _isPickingKtp = false);
-    }
-  }
-
-  /// Ambil foto nasabah + barang jaminan
-  Future<void> _pickNasabahBarangPhoto() async {
-    if (_isPickingNasabah) return;
-    final ImageSource? source = await _showSourcePicker('Foto Nasabah & Barang');
-    if (source == null || !mounted) return;
-    setState(() => _isPickingNasabah = true);
-    try {
-      final XFile? picked = await ImagePicker().pickImage(source: source, imageQuality: 80, maxWidth: 1280);
-      if (!mounted) return;
-      if (picked != null) {
-        setState(() => _nasabahBarangPhoto = picked);
-        widget.onCustomerAndBarangPhotoUploadedChanged(true);
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Foto nasabah & barang berhasil diambil'),
-            backgroundColor: Colors.green,
-            duration: Duration(seconds: 1),
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
-      }
-    } finally {
-      if (mounted) setState(() => _isPickingNasabah = false);
-    }
-  }
-
-  /// Ambil foto barang gadai saja
-  Future<void> _pickBarangGadaiPhoto() async {
-    if (_isPickingBarang) return;
-    final ImageSource? source = await _showSourcePicker('Foto Barang Gadai');
-    if (source == null || !mounted) return;
-    setState(() => _isPickingBarang = true);
-    try {
-      final XFile? picked = await ImagePicker().pickImage(source: source, imageQuality: 80, maxWidth: 1280);
-      if (!mounted) return;
-      if (picked != null) setState(() => _barangGadaiPhoto = picked);
-    } finally {
-      if (mounted) setState(() => _isPickingBarang = false);
-    }
-  }
-
 
   InputDecoration _getInputDecoration({String? hint}) {
     return InputDecoration(
@@ -205,70 +80,10 @@ class _Step3BiodataViewState extends State<Step3BiodataView> {
     );
   }
 
-  Widget _buildPhotoSlot({
-    required String label,
-    required IconData icon,
-    required XFile? photo,
-    required bool isUploaded,
-    required bool isPicking,
-    required VoidCallback onTap,
-  }) {
-    return GestureDetector(
-      onTap: isPicking ? null : onTap,
-      child: AspectRatio(
-        aspectRatio: 1,
-        child: Container(
-          decoration: BoxDecoration(
-            color: isUploaded ? const Color(0xFFECFDF5) : Colors.white,
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(
-              color: isUploaded ? const Color(0xFF10B981) : const Color(0xFFCBD5E1),
-              width: 1.5,
-            ),
-          ),
-          child: isPicking
-              ? const Center(child: SizedBox(width: 24, height: 24, child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.primary)))
-              : photo != null
-                  ? Stack(
-                      fit: StackFit.expand,
-                      children: [
-                        ClipRRect(
-                          borderRadius: BorderRadius.circular(11),
-                          child: Image.file(File(photo.path), fit: BoxFit.cover),
-                        ),
-                        Positioned(
-                          bottom: 4, left: 0, right: 0,
-                          child: Center(
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                              decoration: BoxDecoration(color: Colors.black54, borderRadius: BorderRadius.circular(6)),
-                              child: const Text('Ketuk ganti', style: TextStyle(color: Colors.white, fontSize: 9)),
-                            ),
-                          ),
-                        ),
-                      ],
-                    )
-                  : Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(icon, color: const Color(0xFF94A3B8), size: 28),
-                        const SizedBox(height: 6),
-                        Text(
-                          label,
-                          textAlign: TextAlign.center,
-                          style: const TextStyle(color: Color(0xFF64748B), fontSize: 10, fontWeight: FontWeight.w600),
-                        ),
-                        const SizedBox(height: 2),
-                        const Text('Ketuk unggah', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 9)),
-                      ],
-                    ),
-        ),
-      ),
-    );
-  }
 
   @override
   Widget build(BuildContext context) {
+
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
       child: Form(
@@ -614,55 +429,11 @@ class _Step3BiodataViewState extends State<Step3BiodataView> {
                 return null;
               },
             ),
-            const SizedBox(height: 24),
-
-            // ─── 3-Kolom Foto ───────────────────────────────
-            const Text(
-              'Foto Dokumen & Jaminan',
-              style: TextStyle(
-                color: AppColors.textDark,
-                fontSize: 14,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-            const SizedBox(height: 10),
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // Kolom 1 — Foto KTP
-                Expanded(child: _buildPhotoSlot(
-                  label: 'Foto KTP',
-                  icon: Icons.credit_card_rounded,
-                  photo: _ktpPhoto,
-                  isUploaded: widget.ktpUploaded,
-                  isPicking: _isPickingKtp,
-                  onTap: _pickKtpPhoto,
-                )),
-                const SizedBox(width: 8),
-                // Kolom 2 — Foto Nasabah & Barang
-                Expanded(child: _buildPhotoSlot(
-                  label: 'Nasabah+Barang',
-                  icon: Icons.people_alt_rounded,
-                  photo: _nasabahBarangPhoto,
-                  isUploaded: widget.customerAndBarangPhotoUploaded,
-                  isPicking: _isPickingNasabah,
-                  onTap: _pickNasabahBarangPhoto,
-                )),
-                const SizedBox(width: 8),
-                // Kolom 3 — Foto Barang Gadai
-                Expanded(child: _buildPhotoSlot(
-                  label: 'Barang Gadai',
-                  icon: Icons.camera_enhance_outlined,
-                  photo: _barangGadaiPhoto,
-                  isUploaded: _barangGadaiPhoto != null,
-                  isPicking: _isPickingBarang,
-                  onTap: _pickBarangGadaiPhoto,
-                )),
-              ],
-            ),
+            const SizedBox(height: 20),
           ],
         ),
       ),
     );
   }
 }
+
