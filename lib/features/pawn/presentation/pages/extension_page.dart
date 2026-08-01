@@ -18,7 +18,8 @@ class ExtensionPage extends StatefulWidget {
 class _ExtensionPageState extends State<ExtensionPage> {
   final _formKey = GlobalKey<FormState>();
   String? _selectedTxId;
-  String _selectedExtensionPeriod = '15 Hari';
+  int _extensionDays = 15;
+  final _customDaysController = TextEditingController(text: '15');
   bool _isPaymentConfirmed = false;
   final _svc = SupabaseGadaiService.instance;
   List<PawnTransaction> _allTxs = [];
@@ -29,6 +30,18 @@ class _ExtensionPageState extends State<ExtensionPage> {
   void initState() {
     super.initState();
     _loadData();
+    _customDaysController.addListener(() {
+      final val = int.tryParse(_customDaysController.text);
+      if (val != null && val > 0 && val != _extensionDays) {
+        setState(() => _extensionDays = val);
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _customDaysController.dispose();
+    super.dispose();
   }
 
   Future<void> _loadData() async {
@@ -97,7 +110,7 @@ class _ExtensionPageState extends State<ExtensionPage> {
   }
 
   void _processExtension(PawnTransaction tx) async {
-    final days = _selectedExtensionPeriod == '15 Hari' ? 15 : 30;
+    final days = _extensionDays;
     final oldDueDate = tx.dateDue;
     // Bug Fix: jatipDibayar = dailyFee * days (biaya tenor baru)
     // bukan tx.totalFee yang merupakan akumulasi fee sebelumnya
@@ -310,7 +323,7 @@ class _ExtensionPageState extends State<ExtensionPage> {
     int dueFee = 0;
     DateTime newDueDate = DateTime.now();
     if (currentTx != null) {
-      final days = _selectedExtensionPeriod == '15 Hari' ? 15 : 30;
+      final days = _extensionDays;
       // Konsisten dengan _processExtension: jatip yg dibayar = dailyFee × hari tenor baru
       dueFee = currentTx.dailyFee * days;
       // Jika macet (dateDue sudah lewat), hitung dari hari ini — konsisten dengan _processExtension
@@ -485,31 +498,83 @@ class _ExtensionPageState extends State<ExtensionPage> {
                               child: Divider(color: Color(0xFFE2E8F0)),
                             ),
 
-                            // Input: Select extension days
+                            // Input: Tenor perpanjangan bebas
                             const Text(
-                              'Pilih Tenor Perpanjangan',
+                              'Tenor Perpanjangan (Hari)',
                               style: TextStyle(color: AppColors.textDark, fontSize: 13, fontWeight: FontWeight.w600),
                             ),
                             const SizedBox(height: 8),
-                            DropdownButtonFormField<String>(
-                              initialValue: _selectedExtensionPeriod,
+                            // Pilihan cepat
+                            Row(
+                              children: [7, 15, 30].map((d) {
+                                final isSelected = _extensionDays == d &&
+                                    _customDaysController.text == d.toString();
+                                return Padding(
+                                  padding: const EdgeInsets.only(right: 8),
+                                  child: GestureDetector(
+                                    onTap: () {
+                                      setState(() => _extensionDays = d);
+                                      _customDaysController.text = d.toString();
+                                      _customDaysController.selection = TextSelection.collapsed(
+                                        offset: _customDaysController.text.length,
+                                      );
+                                    },
+                                    child: Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                                      decoration: BoxDecoration(
+                                        color: isSelected ? AppColors.primary : const Color(0xFFF1F5F9),
+                                        borderRadius: BorderRadius.circular(20),
+                                        border: Border.all(
+                                          color: isSelected ? AppColors.primary : const Color(0xFFE2E8F0),
+                                        ),
+                                      ),
+                                      child: Text(
+                                        '$d Hari',
+                                        style: TextStyle(
+                                          fontSize: 12,
+                                          fontWeight: FontWeight.w600,
+                                          color: isSelected ? Colors.white : AppColors.textMuted,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                );
+                              }).toList(),
+                            ),
+                            const SizedBox(height: 10),
+                            // Input angka bebas
+                            TextFormField(
+                              controller: _customDaysController,
+                              keyboardType: TextInputType.number,
                               decoration: InputDecoration(
                                 filled: true,
                                 fillColor: const Color(0xFFF8FAFC),
-                                contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                                contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
                                 border: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(8),
-                                  borderSide: BorderSide.none,
+                                  borderRadius: BorderRadius.circular(10),
+                                  borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
                                 ),
+                                enabledBorder: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(10),
+                                  borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
+                                ),
+                                focusedBorder: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(10),
+                                  borderSide: const BorderSide(color: AppColors.primary, width: 1.5),
+                                ),
+                                suffixText: 'hari',
+                                suffixStyle: const TextStyle(color: AppColors.textMuted, fontSize: 13),
+                                hintText: 'Masukkan jumlah hari',
+                                hintStyle: const TextStyle(color: Color(0xFFCBD5E1), fontSize: 13),
                               ),
-                              items: const [
-                                DropdownMenuItem(value: '15 Hari', child: Text('15 Hari')),
-                                DropdownMenuItem(value: '30 Hari', child: Text('30 Hari')),
-                              ],
+                              validator: (val) {
+                                final n = int.tryParse(val ?? '');
+                                if (n == null || n <= 0) return 'Masukkan jumlah hari yang valid';
+                                return null;
+                              },
                               onChanged: (val) {
-                                setState(() {
-                                  _selectedExtensionPeriod = val!;
-                                });
+                                final n = int.tryParse(val);
+                                if (n != null && n > 0) setState(() => _extensionDays = n);
                               },
                             ),
                             const SizedBox(height: 16),
@@ -569,7 +634,11 @@ class _ExtensionPageState extends State<ExtensionPage> {
                         height: 50,
                         child: ElevatedButton(
                           onPressed: _isPaymentConfirmed
-                              ? () => _processExtension(currentTx)
+                              ? () {
+                                  if (_formKey.currentState!.validate()) {
+                                    _processExtension(currentTx);
+                                  }
+                                }
                               : null,
                           style: ElevatedButton.styleFrom(
                             backgroundColor: AppColors.primary,

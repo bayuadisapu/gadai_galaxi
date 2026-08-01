@@ -1600,6 +1600,36 @@ class SupabaseGadaiService {
     return channel;
   }
 
+  /// Subscribe realtime ke SEMUA transaksi nasabah tertentu (by nasabah_id).
+  /// Digunakan dari dashboard nasabah agar notifikasi aktif tanpa buka halaman detail.
+  RealtimeChannel subscribeToNasabahTransactions({
+    required String customerId,
+    required void Function(PawnTransaction tx) onUpdate,
+  }) {
+    final channel = _client
+        .channel('nasabah-all-txs-$customerId')
+        .onPostgresChanges(
+          event: PostgresChangeEvent.update,
+          schema: 'public',
+          table: 'gadai_transactions',
+          filter: PostgresChangeFilter(
+            type: PostgresChangeFilterType.eq,
+            column: 'nasabah_id',
+            value: customerId,
+          ),
+          callback: (payload) {
+            try {
+              final row = Map<String, dynamic>.from(payload.newRecord);
+              onUpdate(_txFromRow(row));
+            } catch (e) {
+              debugPrint('[RealtimeNasabah] parse error: $e');
+            }
+          },
+        )
+        .subscribe();
+    return channel;
+  }
+
   /// Log aktivitas — pembayaran disubmit nasabah
   Future<bool> logPaymentSubmitted(String nasabahId, String txId, String paymentType) =>
       logActivity(

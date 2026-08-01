@@ -46,6 +46,7 @@ class _AdminCabangDashboardPageState extends State<AdminCabangDashboardPage> {
   bool _isLoading = true;
   int _walletBalance = 0;
   int _pendingPaymentsCount = 0; // badge verifikasi pembayaran
+  RealtimeChannel? _paymentRealtimeChannel; // global notif subscription
 
   @override
   void initState() {
@@ -53,6 +54,8 @@ class _AdminCabangDashboardPageState extends State<AdminCabangDashboardPage> {
     _loadData();
     // Inisialisasi FCM + request permission + simpan token
     _initFcm();
+    // Subscribe realtime untuk notifikasi pembayaran masuk
+    _subscribePaymentNotifications();
   }
 
   Future<void> _initFcm() async {
@@ -95,9 +98,40 @@ class _AdminCabangDashboardPageState extends State<AdminCabangDashboardPage> {
     }
   }
 
+  /// Global realtime subscription — notif pembayaran masuk meski halaman verifikasi tidak dibuka
+  void _subscribePaymentNotifications() {
+    _paymentRealtimeChannel = _svc.subscribeToPaymentRequests(
+      branchId: widget.cabangId == 'all' ? '' : widget.cabangId,
+      onNewPayment: (tx) async {
+        if (!mounted) return;
+        // Tambah badge counter
+        setState(() => _pendingPaymentsCount++);
+        // Ambil nama nasabah dari daftar yang sudah ada, atau fallback
+        final nama = _customers
+            .where((c) => c.id == tx.customerId)
+            .map((c) => c.name)
+            .firstOrNull ?? 'Nasabah';
+        // Tampilkan local notification
+        FcmService.instance.showPaymentRequestNotification(
+          nasabahName: nama,
+          txCode: tx.displayCode,
+          paymentType: tx.paymentType ?? 'perpanjang',
+        );
+      },
+      onPaymentUpdated: (tx) {
+        if (!mounted) return;
+        // Kurangi badge saat payment diverifikasi/ditolak
+        if (_pendingPaymentsCount > 0) {
+          setState(() => _pendingPaymentsCount--);
+        }
+      },
+    );
+  }
+
   @override
   void dispose() {
     _searchController.dispose();
+    _paymentRealtimeChannel?.unsubscribe();
     super.dispose();
   }
 

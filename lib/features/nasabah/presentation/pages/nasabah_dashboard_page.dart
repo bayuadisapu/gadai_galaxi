@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:galaxi_gadai/core/constants/app_colors.dart';
 import 'package:galaxi_gadai/core/data/data_models.dart';
 import 'package:galaxi_gadai/core/services/supabase_gadai_service.dart';
@@ -24,12 +25,16 @@ class _NasabahDashboardPageState extends State<NasabahDashboardPage> {
   final _svc = SupabaseGadaiService.instance;
   List<PawnTransaction> _txs = [];
   bool _isLoading = true;
+  RealtimeChannel? _realtimeChannel;
+  // Track previous statuses untuk deteksi perubahan
+  final Map<String, String> _prevStatuses = {};
 
   @override
   void initState() {
     super.initState();
     _loadData();
     _initFcm();
+    _subscribeRealtimeNotifications();
   }
 
   Future<void> _initFcm() async {
@@ -38,11 +43,50 @@ class _NasabahDashboardPageState extends State<NasabahDashboardPage> {
     await FcmService.instance.saveNasabahFcmToken(widget.customer.phone);
   }
 
+  /// Global realtime subscription — aktif selama dashboard terbuka
+  void _subscribeRealtimeNotifications() {
+    _realtimeChannel = _svc.subscribeToNasabahTransactions(
+      customerId: widget.customer.id,
+      onUpdate: (updatedTx) {
+        if (!mounted) return;
+        final oldStatus = _prevStatuses[updatedTx.id];
+        _prevStatuses[updatedTx.id] = updatedTx.status;
+
+        // Hanya tampilkan notifikasi saat status berubah dari Menunggu Verifikasi
+        if (oldStatus == 'Menunggu Verifikasi') {
+          if (updatedTx.status == 'Aktif' ||
+              updatedTx.status == 'Menunggu Pengambilan') {
+            FcmService.instance.showPaymentVerifiedNotification(
+              txCode: updatedTx.displayCode,
+              paymentType: updatedTx.paymentType ??
+                  (updatedTx.status == 'Menunggu Pengambilan'
+                      ? 'tebus'
+                      : 'perpanjang'),
+            );
+          } else if (updatedTx.paymentRejectReason != null &&
+              updatedTx.paymentRejectReason!.isNotEmpty) {
+            FcmService.instance.showPaymentRejectedNotification(
+              txCode: updatedTx.displayCode,
+              reason: updatedTx.paymentRejectReason,
+            );
+          }
+        }
+
+        // Refresh list transaksi
+        _loadData();
+      },
+    );
+  }
+
   Future<void> _loadData() async {
     setState(() => _isLoading = true);
     try {
       final txs = await _svc.fetchTransactions(nasabahId: widget.customer.id);
       if (!mounted) return;
+      // Simpan status awal semua transaksi
+      for (final tx in txs) {
+        _prevStatuses.putIfAbsent(tx.id, () => tx.status);
+      }
       setState(() { _txs = txs; _isLoading = false; });
     } catch (e) {
       if (!mounted) return;
@@ -50,7 +94,15 @@ class _NasabahDashboardPageState extends State<NasabahDashboardPage> {
     }
   }
 
+  @override
+  void dispose() {
+    _realtimeChannel?.unsubscribe();
+    super.dispose();
+  }
+
   void _logout() {
+    // Unsubscribe sebelum logout
+    _realtimeChannel?.unsubscribe();
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
